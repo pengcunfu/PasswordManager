@@ -21,7 +21,7 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Grid Margin="20">
+    <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -35,7 +35,7 @@
                  FontSize="18"
                  FontWeight="SemiBold"
                  Foreground="#333333"
-                 Margin="0,0,0,16"/>
+                 Margin="0,0,0,10"/>
 
             <!-- 表单区域 -->
             <ScrollViewer Grid.Row="1" Style="{StaticResource ModernScrollViewer}">
@@ -47,7 +47,7 @@
                               Margin="0,0,0,8"/>
                     <TextBox x:Name="TitleTextBox"
                            Style="{StaticResource NaiveTextBox}"
-                           Margin="0,0,0,16"/>
+                           Margin="0,0,0,10"/>
 
                     <!-- 用户名 -->
                     <TextBlock Text="用户名 *"
@@ -56,7 +56,7 @@
                               Margin="0,0,0,8"/>
                     <TextBox x:Name="UsernameTextBox"
                            Style="{StaticResource NaiveTextBox}"
-                           Margin="0,0,0,16"/>
+                           Margin="0,0,0,10"/>
 
                     <!-- 密码 -->
                     <TextBlock Text="密码 *"
@@ -102,7 +102,7 @@
                              Text="密码强度: 无"
                              FontSize="12"
                              Foreground="#888888"
-                             Margin="0,0,0,16"/>
+                             Margin="0,0,0,10"/>
 
                     <!-- 网址 -->
                     <TextBlock Text="网址"
@@ -111,7 +111,7 @@
                               Margin="0,0,0,8"/>
                     <TextBox x:Name="URLTextBox"
                            Style="{StaticResource NaiveTextBox}"
-                           Margin="0,0,0,16"/>
+                           Margin="0,0,0,10"/>
 
                     <!-- 分类 -->
                     <TextBlock Text="分类"
@@ -120,7 +120,7 @@
                               Margin="0,0,0,8"/>
                     <TextBox x:Name="CategoryTextBox"
                            Style="{StaticResource NaiveTextBox}"
-                           Margin="0,0,0,16"/>
+                           Margin="0,0,0,10"/>
 
                     <!-- 备注 -->
                     <TextBlock Text="备注"
@@ -134,17 +134,17 @@
                            Height="90"
                            VerticalScrollBarVisibility="Auto"
                            VerticalContentAlignment="Top"
-                           Padding="12,8"/>
+                           Padding="10,8"/>
                 </StackPanel>
             </ScrollViewer>
 
             <!-- 按钮 -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                 <Button x:Name="CancelButton"
                       Content="取消"
                       Style="{StaticResource NaiveSecondaryButton}"
                       Click="CancelButton_Click"
-                      Margin="0,0,10,0"/>
+                      Margin="0,0,8,0"/>
                 <Button x:Name="SaveButton"
                       Content="保存"
                       Style="{StaticResource NaivePrimaryButton}"

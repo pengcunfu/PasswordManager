@@ -84,7 +84,7 @@
     <Style x:Key="NaiveButton" TargetType="Button">
         <Setter Property="Height" Value="36"/>
         <Setter Property="MinWidth" Value="80"/>
-        <Setter Property="Padding" Value="20,0"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -152,14 +152,14 @@
     <!-- 工具栏按钮样式 -->
     <Style x:Key="ToolbarButton" TargetType="Button" BasedOn="{StaticResource NaiveSecondaryButton}">
         <Setter Property="Height" Value="32"/>
-        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Margin" Value="0,0,8,0"/>
     </Style>
 
     <!-- 小按钮样式 -->
     <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource NaiveSecondaryButton}">
         <Setter Property="Height" Value="34"/>
-        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="FontSize" Value="13"/>
     </Style>
 
@@ -167,7 +167,7 @@
     <!-- 文本输入框样式 -->
     <Style x:Key="NaiveTextBox" TargetType="TextBox">
         <Setter Property="Height" Value="38"/>
-        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Padding" Value="10,8"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="#E0E0E6"/>
@@ -194,7 +194,7 @@
     <!-- 密码框样式 -->
     <Style x:Key="NaivePasswordBox" TargetType="PasswordBox">
         <Setter Property="Height" Value="40"/>
-        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Padding" Value="10,8"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="#E0E0E6"/>
@@ -215,12 +215,12 @@
 
     <!-- 搜索框样式 -->
     <Style x:Key="SearchBox" TargetType="TextBox" BasedOn="{StaticResource NaiveTextBox}">
-        <Setter Property="Margin" Value="12,8,12,8"/>
+        <Setter Property="Margin" Value="10,8,10,8"/>
     </Style>
 
     <!-- ==================== ListBox 样式 ==================== -->
     <Style x:Key="ListBoxItemStyle" TargetType="ListBoxItem">
-        <Setter Property="Padding" Value="12,10"/>
+        <Setter Property="Padding" Value="10,10"/>
         <Setter Property="Margin" Value="6,4"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Background" Value="Transparent"/>
@@ -252,8 +252,8 @@
 
     <!-- ==================== GroupBox 样式 ==================== -->
     <Style x:Key="NaiveGroupBox" TargetType="GroupBox">
-        <Setter Property="Padding" Value="16,12"/>
-        <Setter Property="Margin" Value="0,0,0,16"/>
+        <Setter Property="Padding" Value="10,10"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="#E0E0E6"/>
         <Setter Property="Template">

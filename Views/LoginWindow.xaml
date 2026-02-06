@@ -20,7 +20,7 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Grid Margin="40">
+    <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -45,7 +45,7 @@
                  FontSize="13"
                  Foreground="#666666"
                  HorizontalAlignment="Center"
-                 Margin="0,0,0,28"/>
+                 Margin="0,0,0,10"/>
 
             <!-- 表单区域 -->
             <StackPanel x:Name="FormPanel" Grid.Row="2">
@@ -56,7 +56,7 @@
                           Margin="0,0,0,8"/>
                 <PasswordBox x:Name="PasswordBox"
                           Style="{StaticResource NaivePasswordBox}"
-                          Margin="0,0,0,20"/>
+                          Margin="0,0,0,10"/>
 
                 <!-- 确认密码输入（仅在首次设置时显示） -->
                 <TextBlock x:Name="ConfirmPasswordLabel"
@@ -67,7 +67,7 @@
                           Visibility="Collapsed"/>
                 <PasswordBox x:Name="ConfirmPasswordBox"
                           Style="{StaticResource NaivePasswordBox}"
-                          Margin="0,0,0,20"
+                          Margin="0,0,0,10"
                           Visibility="Collapsed"/>
 
                 <!-- 密码强度显示（仅在首次设置时显示） -->
@@ -80,11 +80,11 @@
             </StackPanel>
 
             <!-- 按钮区域 -->
-            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                 <Button x:Name="CancelButton"
                       Content="退出"
                       Style="{StaticResource NaiveSecondaryButton}"
-                      Margin="0,0,10,0"
+                      Margin="0,0,8,0"
                       Click="CancelButton_Click"/>
                 <Button x:Name="LoginButton"
                       Content="解锁"

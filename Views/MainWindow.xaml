@@ -28,7 +28,7 @@
                Background="White"
                BorderThickness="0,0,0,1"
                BorderBrush="#E0E0E6"
-               Padding="16,12">
+               Padding="10,8">
             <StackPanel Orientation="Horizontal">
                 <Button x:Name="AddButton"
                       Content="添加密码"
@@ -50,7 +50,7 @@
         </Border>
 
         <!-- 主要内容区域 -->
-        <Grid Margin="16">
+        <Grid Margin="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="380"/>
                 <ColumnDefinition Width="8"/>
@@ -127,7 +127,7 @@
                    Background="White"
                    BorderBrush="#D0D0D0"
                    BorderThickness="1"
-                   Padding="20,20,10,20">
+                   Padding="10,10,10,10">
 
                 <Grid>
                     <!-- 默认显示 -->
@@ -148,7 +148,7 @@
                                      FontSize="22"
                                      FontWeight="SemiBold"
                                      Foreground="#333333"
-                                     Margin="0,0,0,24"/>
+                                     Margin="0,0,0,10"/>
 
                             <!-- 用户名 -->
                             <GroupBox Header="用户名" Style="{StaticResource NaiveGroupBox}">
@@ -222,7 +222,7 @@
                             </GroupBox>
 
                             <!-- 时间信息 -->
-                            <StackPanel Margin="0,0,0,20">
+                            <StackPanel Margin="0,0,0,10">
                                 <TextBlock x:Name="DetailCreatedAt"
                                          FontSize="12"
                                          Foreground="#999999"
@@ -239,7 +239,7 @@
                                       Style="{StaticResource NaivePrimaryButton}"
                                       Click="EditButton_Click"
                                       Width="80"
-                                      Margin="0,0,12,0"/>
+                                      Margin="0,0,8,0"/>
                                 <Button x:Name="DeleteButton"
                                       Content="删除"
                                       Style="{StaticResource NaiveSecondaryButton}"
