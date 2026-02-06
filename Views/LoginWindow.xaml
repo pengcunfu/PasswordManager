@@ -4,76 +4,195 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="密码管家 - 登录"
-        Height="350"
+        Title="密码管家"
+        Height="380"
         Width="450"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
-        Icon="../icon.png">
+        Icon="../icon.png"
+        Background="#F0F0F0">
 
-    <Grid Margin="20">
+    <Window.Resources>
+        <!-- 滚动条样式 -->
+        <Style x:Key="ModernScrollBar" TargetType="ScrollBar">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Margin="10,0,0,0">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True" Margin="0">
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="#C0C0C0" CornerRadius="2" Margin="0,0,0,0" MinWidth="3"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Height" Value="3"/>
+                </Trigger>
+                <Trigger Property="Orientation" Value="Vertical">
+                    <Setter Property="Width" Value="3"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ModernScrollViewer" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+            <Style.Resources>
+                <Style TargetType="ScrollBar" BasedOn="{StaticResource ModernScrollBar}"/>
+            </Style.Resources>
+        </Style>
+
+        <!-- 按钮样式 -->
+        <Style x:Key="NaiveButton" TargetType="Button">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Padding" Value="20,0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 主按钮样式 -->
+        <Style x:Key="NaivePrimaryButton" TargetType="Button" BasedOn="{StaticResource NaiveButton}">
+            <Setter Property="Background" Value="#18A058"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- 次要按钮样式 -->
+        <Style x:Key="NaiveSecondaryButton" TargetType="Button" BasedOn="{StaticResource NaiveButton}">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#333333"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#E0E0E6"/>
+        </Style>
+
+        <!-- 输入框样式 -->
+        <Style x:Key="NaivePasswordBox" TargetType="PasswordBox">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#E0E0E6"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CaretBrush" Value="#18A058"/>
+            <Style.Resources>
+                <Style TargetType="Border">
+                    <Setter Property="CornerRadius" Value="6"/>
+                </Style>
+            </Style.Resources>
+            <Style.Triggers>
+                <Trigger Property="IsFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="#18A058"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="40">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- 标题 -->
-        <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,20">
+        <!-- 标题区域 -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
             <TextBlock x:Name="TitleTextBlock"
                      Text="密码管家"
-                     FontSize="20"
-                     FontWeight="Bold"
+                     FontSize="22"
+                     FontWeight="SemiBold"
+                     Foreground="#333333"
                      HorizontalAlignment="Center"/>
-            <TextBlock x:Name="SubtitleTextBlock"
-                     Text="请输入主密码解锁"
-                     FontSize="12"
-                     Foreground="Gray"
-                     HorizontalAlignment="Center"
-                     Margin="0,5,0,0"/>
         </StackPanel>
 
-        <!-- 分隔线 -->
-        <Separator Grid.Row="1" Margin="0,0,0,20"/>
+        <!-- 副标题 -->
+        <TextBlock x:Name="SubtitleTextBlock"
+                 Grid.Row="1"
+                 Text="请输入主密码解锁"
+                 FontSize="13"
+                 Foreground="#666666"
+                 HorizontalAlignment="Center"
+                 Margin="0,0,0,28"/>
 
-        <!-- 表单区域 -->
-        <StackPanel x:Name="FormPanel" Grid.Row="2">
-            <!-- 主密码输入 -->
-            <Label Content="主密码:" FontWeight="Bold"/>
-            <PasswordBox x:Name="PasswordBox" Margin="0,5,0,10"/>
+            <!-- 表单区域 -->
+            <StackPanel x:Name="FormPanel" Grid.Row="2">
+                <!-- 主密码输入 -->
+                <TextBlock Text="主密码"
+                          FontSize="14"
+                          Foreground="#555555"
+                          Margin="0,0,0,8"/>
+                <PasswordBox x:Name="PasswordBox"
+                          Style="{StaticResource NaivePasswordBox}"
+                          Margin="0,0,0,20"/>
 
-            <!-- 确认密码输入（仅在首次设置时显示） -->
-            <Label x:Name="ConfirmPasswordLabel"
-                 Content="确认密码:"
-                 FontWeight="Bold"
-                 Visibility="Collapsed"/>
-            <PasswordBox x:Name="ConfirmPasswordBox"
-                       Margin="0,5,0,10"
-                       Visibility="Collapsed"/>
+                <!-- 确认密码输入（仅在首次设置时显示） -->
+                <TextBlock x:Name="ConfirmPasswordLabel"
+                          Text="确认密码"
+                          FontSize="14"
+                          Foreground="#555555"
+                          Margin="0,0,0,8"
+                          Visibility="Collapsed"/>
+                <PasswordBox x:Name="ConfirmPasswordBox"
+                          Style="{StaticResource NaivePasswordBox}"
+                          Margin="0,0,0,20"
+                          Visibility="Collapsed"/>
 
-            <!-- 密码强度显示（仅在首次设置时显示） -->
-            <TextBlock x:Name="StrengthLabel"
-                     Text="密码强度: 无"
-                     FontSize="11"
-                     Foreground="Gray"
-                     Margin="0,0,0,10"
-                     Visibility="Collapsed"/>
-        </StackPanel>
+                <!-- 密码强度显示（仅在首次设置时显示） -->
+                <TextBlock x:Name="StrengthLabel"
+                          Text="密码强度: 无"
+                          FontSize="12"
+                          Foreground="#888888"
+                          Margin="0,0,0,8"
+                          Visibility="Collapsed"/>
+            </StackPanel>
 
-        <!-- 按钮区域 -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
-            <Button x:Name="CancelButton"
-                  Content="退出"
-                  Width="80"
-                  Margin="0,0,10,0"
-                  Click="CancelButton_Click"/>
-            <Button x:Name="LoginButton"
-                  Content="解锁"
-                  Width="80"
-                  Click="LoginButton_Click"
-                  IsDefault="True"/>
-        </StackPanel>
-    </Grid>
+            <!-- 按钮区域 -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+                <Button x:Name="CancelButton"
+                      Content="退出"
+                      Style="{StaticResource NaiveSecondaryButton}"
+                      Margin="0,0,10,0"
+                      Click="CancelButton_Click"/>
+                <Button x:Name="LoginButton"
+                      Content="解锁"
+                      Style="{StaticResource NaivePrimaryButton}"
+                      Click="LoginButton_Click"
+                      IsDefault="True"/>
+            </StackPanel>
+        </Grid>
 </Window>
