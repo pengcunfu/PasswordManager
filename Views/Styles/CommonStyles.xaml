@@ -40,6 +40,45 @@
         </Style.Resources>
     </Style>
 
+    <!-- 无右边距的滚动条样式 -->
+    <Style x:Key="ModernScrollBarNoRightMargin" TargetType="ScrollBar">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Margin="10,0,0,0">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True" Margin="0">
+                            <Track.Thumb>
+                                <Thumb>
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border Background="#C0C0C0" CornerRadius="2" Margin="0,0,0,0" MinWidth="3"/>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Height" Value="3"/>
+            </Trigger>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="3"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ModernScrollViewerNoRightMargin" TargetType="ScrollViewer">
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+        <Style.Resources>
+            <Style TargetType="ScrollBar" BasedOn="{StaticResource ModernScrollBarNoRightMargin}"/>
+        </Style.Resources>
+    </Style>
+
     <!-- ==================== 按钮样式 ==================== -->
     <!-- 基础按钮样式 -->
     <Style x:Key="NaiveButton" TargetType="Button">

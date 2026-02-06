@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows.Data;
 
-namespace PasswordManager.Views
+namespace PasswordManager.Views.Converters
 {
     /// <summary>
     /// 获取字符串首字符的转换器
