@@ -89,8 +89,7 @@
                 <Button x:Name="LoginButton"
                       Content="解锁"
                       Style="{StaticResource NaivePrimaryButton}"
-                      Click="LoginButton_Click"
-                      IsDefault="True"/>
+                      Click="LoginButton_Click"/>
             </StackPanel>
         </Grid>
 </Window>

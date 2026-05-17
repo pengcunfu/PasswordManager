@@ -109,25 +109,24 @@ namespace PasswordManager.Views
 
         private void PasswordBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter)
-            {
-                if (_isFirstTime)
-                {
-                    ConfirmPasswordBox.Focus();
-                }
-                else
-                {
-                    LoginButton_Click(sender, e);
-                }
-            }
+            if (e.Key != Key.Enter)
+                return;
+
+            e.Handled = true;
+
+            if (_isFirstTime)
+                ConfirmPasswordBox.Focus();
+            else
+                LoginButton_Click(sender, e);
         }
 
         private void ConfirmPasswordBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter)
-            {
-                LoginButton_Click(sender, e);
-            }
+            if (e.Key != Key.Enter)
+                return;
+
+            e.Handled = true;
+            LoginButton_Click(sender, e);
         }
 
         private void LoginButton_Click(object sender, RoutedEventArgs e)

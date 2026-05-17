@@ -42,6 +42,10 @@
                       Content="备份数据"
                       Style="{StaticResource ToolbarButton}"
                       Click="BackupButton_Click"/>
+                <Button x:Name="AboutButton"
+                      Content="关于"
+                      Style="{StaticResource ToolbarButton}"
+                      Click="AboutButton_Click"/>
                 <Button x:Name="LogoutButton"
                       Content="注销"
                       Style="{StaticResource ToolbarButton}"

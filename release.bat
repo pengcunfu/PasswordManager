@@ -14,9 +14,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo ============================================================
 echo Building Release configuration
-echo ============================================================
 dotnet build "%PROJECT%" -c Release
 if errorlevel 1 (
     echo.
@@ -26,11 +24,6 @@ if errorlevel 1 (
 )
 
 echo.
-echo ============================================================
 echo Build succeeded
-echo ============================================================
 echo Output directory: %~dp0bin\Release\net8.0-windows
-echo Executable: %OUTPUT%
-echo ============================================================
-pause
 exit /b 0

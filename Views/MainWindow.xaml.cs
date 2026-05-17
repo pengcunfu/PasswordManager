@@ -155,6 +155,13 @@ namespace PasswordManager.Views
             }
         }
 
+        private void AboutButton_Click(object sender, RoutedEventArgs e)
+        {
+            var aboutDialog = new AboutDialog();
+            aboutDialog.Owner = this;
+            aboutDialog.ShowDialog();
+        }
+
         private void LogoutButton_Click(object sender, RoutedEventArgs e)
         {
             var result = MessageBox.Show("确定要注销并返回登录界面吗？", "注销确认", 
