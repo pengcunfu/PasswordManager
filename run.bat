@@ -1,5 +1,5 @@
 @echo off
-title Password Manager
+title Password Manager - Debug
 cd /d "%~dp0"
 
 set "PROJECT=PasswordManager.csproj"
@@ -13,13 +13,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if exist "%EXE%" (
-    echo Starting Password Manager...
-    start "" "%EXE%"
-    exit /b 0
-)
-
-echo First run, building...
+echo Building Debug (console mode)...
 dotnet build "%PROJECT%" -c Debug
 if errorlevel 1 (
     echo.
@@ -28,5 +22,11 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Starting Password Manager...
-start "" "%EXE%"
+echo Starting Password Manager (debug, console attached)...
+echo.
+"%EXE%"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Application exited with code %errorlevel%
+    pause
+)

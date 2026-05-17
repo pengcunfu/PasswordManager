@@ -14,8 +14,14 @@ namespace PasswordManager
         {
             try
             {
+#if DEBUG
+                Console.WriteLine("[PasswordManager] Starting (Debug / console mode)...");
+#endif
                 // 获取用户数据目录
                 string dataDir = StorageManager.GetUserDataDirectory();
+#if DEBUG
+                Console.WriteLine($"[PasswordManager] Data directory: {dataDir}");
+#endif
                 
                 // 创建并显示登录窗口
                 var loginWindow = new LoginWindow(dataDir, (storageManager) =>
@@ -29,6 +35,9 @@ namespace PasswordManager
             }
             catch (Exception ex)
             {
+#if DEBUG
+                Console.Error.WriteLine($"[PasswordManager] Startup failed: {ex}");
+#endif
                 MessageBox.Show($"应用程序启动失败: {ex.Message}", "错误", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown();
@@ -38,6 +47,9 @@ namespace PasswordManager
         private void Application_DispatcherUnhandledException(object sender, 
             System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
+#if DEBUG
+            Console.Error.WriteLine($"[PasswordManager] Unhandled exception: {e.Exception}");
+#endif
             MessageBox.Show($"发生未处理的异常: {e.Exception.Message}", "错误", 
                 MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;

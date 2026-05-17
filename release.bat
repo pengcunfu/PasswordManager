@@ -4,7 +4,8 @@ title Password Manager - Release Build
 cd /d "%~dp0"
 
 set "PROJECT=PasswordManager.csproj"
-set "OUTPUT=bin\Release\net8.0-windows\PasswordManager.exe"
+set "OUTPUT_DIR=bin\Release\net8.0-windows"
+set "OUTPUT=%OUTPUT_DIR%\PasswordManager.exe"
 
 where dotnet >nul 2>&1
 if errorlevel 1 (
@@ -14,7 +15,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Building Release configuration
+echo Building Release (desktop / WinExe, no console)...
 dotnet build "%PROJECT%" -c Release
 if errorlevel 1 (
     echo.
@@ -25,5 +26,6 @@ if errorlevel 1 (
 
 echo.
 echo Build succeeded
-echo Output directory: %~dp0bin\Release\net8.0-windows
+echo Output: %~dp0%OUTPUT%
+echo Mode:   WinExe (desktop application, no console window)
 exit /b 0
