@@ -50,7 +50,7 @@
         </Border>
 
         <!-- 主要内容区域 -->
-        <Grid Margin="10">
+        <Grid Margin="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="380"/>
                 <ColumnDefinition Width="8"/>
