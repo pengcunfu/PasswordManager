@@ -22,6 +22,12 @@ namespace PasswordManager.Models
         public PasswordEntry()
         {
             _id = GenerateId();
+            _title = string.Empty;
+            _username = string.Empty;
+            _password = string.Empty;
+            _url = string.Empty;
+            _notes = string.Empty;
+            _category = string.Empty;
             _createdAt = DateTime.Now;
             _updatedAt = DateTime.Now;
         }
@@ -91,9 +97,9 @@ namespace PasswordManager.Models
             set => SetProperty(ref _updatedAt, value);
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }

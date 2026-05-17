@@ -10,7 +10,7 @@ namespace PasswordManager.Views
     /// </summary>
     public partial class PasswordGeneratorDialog : Window
     {
-        public string GeneratedPassword { get; private set; }
+        public string? GeneratedPassword { get; private set; }
 
         public PasswordGeneratorDialog()
         {
@@ -66,10 +66,10 @@ namespace PasswordManager.Views
                 int length = (int)LengthSlider.Value;
                 
                 // 检查至少选择了一种字符类型
-                if (!IncludeUppercaseCheckBox.IsChecked.Value && 
-                    !IncludeLowercaseCheckBox.IsChecked.Value && 
-                    !IncludeDigitsCheckBox.IsChecked.Value && 
-                    !IncludeSymbolsCheckBox.IsChecked.Value)
+                if (IncludeUppercaseCheckBox.IsChecked != true &&
+                    IncludeLowercaseCheckBox.IsChecked != true &&
+                    IncludeDigitsCheckBox.IsChecked != true &&
+                    IncludeSymbolsCheckBox.IsChecked != true)
                 {
                     MessageBox.Show("请至少选择一种字符类型", "错误", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
@@ -107,16 +107,16 @@ namespace PasswordManager.Views
         {
             var charset = new StringBuilder();
             
-            if (IncludeUppercaseCheckBox.IsChecked.Value)
+            if (IncludeUppercaseCheckBox.IsChecked == true)
                 charset.Append("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
             
-            if (IncludeLowercaseCheckBox.IsChecked.Value)
+            if (IncludeLowercaseCheckBox.IsChecked == true)
                 charset.Append("abcdefghijklmnopqrstuvwxyz");
             
-            if (IncludeDigitsCheckBox.IsChecked.Value)
+            if (IncludeDigitsCheckBox.IsChecked == true)
                 charset.Append("0123456789");
             
-            if (IncludeSymbolsCheckBox.IsChecked.Value)
+            if (IncludeSymbolsCheckBox.IsChecked == true)
                 charset.Append("!@#$%^&*()_+-=[]{}|;:,.<>?");
             
             return charset.ToString();

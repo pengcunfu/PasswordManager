@@ -12,11 +12,11 @@ namespace PasswordManager.Views
     public partial class AddEntryDialog : Window
     {
         private readonly StorageManager _storageManager;
-        private readonly PasswordEntry _editingEntry;
+        private readonly PasswordEntry? _editingEntry;
         private bool _isPasswordVisible;
         private bool _isEditMode;
 
-        public AddEntryDialog(StorageManager storageManager, PasswordEntry editingEntry = null)
+        public AddEntryDialog(StorageManager storageManager, PasswordEntry? editingEntry = null)
         {
             InitializeComponent();
             _storageManager = storageManager;
@@ -37,7 +37,7 @@ namespace PasswordManager.Views
                 SaveButton.Content = "更新";
                 
                 // 填充现有数据
-                TitleTextBox.Text = _editingEntry.Title;
+                TitleTextBox.Text = _editingEntry!.Title;
                 UsernameTextBox.Text = _editingEntry.Username;
                 PasswordBox.Password = _editingEntry.Password;
                 URLTextBox.Text = _editingEntry.URL;
@@ -175,14 +175,15 @@ namespace PasswordManager.Views
                 if (_isEditMode)
                 {
                     // 更新现有条目
-                    _editingEntry.Title = TitleTextBox.Text.Trim();
-                    _editingEntry.Username = UsernameTextBox.Text.Trim();
-                    _editingEntry.Password = password;
-                    _editingEntry.URL = URLTextBox.Text?.Trim() ?? "";
-                    _editingEntry.Category = CategoryTextBox.Text?.Trim() ?? "";
-                    _editingEntry.Notes = NotesTextBox.Text?.Trim() ?? "";
+                    var entry = _editingEntry!;
+                    entry.Title = TitleTextBox.Text.Trim();
+                    entry.Username = UsernameTextBox.Text.Trim();
+                    entry.Password = password;
+                    entry.URL = URLTextBox.Text?.Trim() ?? "";
+                    entry.Category = CategoryTextBox.Text?.Trim() ?? "";
+                    entry.Notes = NotesTextBox.Text?.Trim() ?? "";
                     
-                    _storageManager.UpdateEntry(_editingEntry);
+                    _storageManager.UpdateEntry(entry);
                     MessageBox.Show("密码条目已更新", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else

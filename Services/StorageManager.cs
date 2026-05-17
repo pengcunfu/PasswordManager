@@ -18,7 +18,7 @@ namespace PasswordManager.Services
 
         private readonly string _dataPath;
         private readonly CryptoManager _cryptoManager;
-        private Database _database;
+        private Database? _database;
 
         public StorageManager(string dataDir, CryptoManager cryptoManager)
         {
@@ -57,7 +57,8 @@ namespace PasswordManager.Services
             // 获取盐值（未加密）
             if (root.TryGetProperty("salt", out var saltElement))
             {
-                _database.Salt = saltElement.GetString();
+                _database.Salt = saltElement.GetString()
+                    ?? throw new InvalidOperationException("无法读取盐值");
             }
             else
             {
@@ -204,7 +205,9 @@ namespace PasswordManager.Services
                 throw new InvalidOperationException("数据库未初始化");
 
             // 创建备份目录
-            string backupDir = Path.Combine(Path.GetDirectoryName(_dataPath), BackupDir);
+            string dataDir = Path.GetDirectoryName(_dataPath)
+                ?? throw new InvalidOperationException("无法确定数据目录");
+            string backupDir = Path.Combine(dataDir, BackupDir);
             Directory.CreateDirectory(backupDir);
 
             // 生成备份文件名
@@ -247,19 +250,19 @@ namespace PasswordManager.Services
 
             // 解析非加密字段
             if (entryElement.TryGetProperty("id", out var idElement))
-                entry.Id = idElement.GetString();
+                entry.Id = idElement.GetString() ?? string.Empty;
 
             if (entryElement.TryGetProperty("title", out var titleElement))
-                entry.Title = titleElement.GetString();
+                entry.Title = titleElement.GetString() ?? string.Empty;
 
             if (entryElement.TryGetProperty("username", out var usernameElement))
-                entry.Username = usernameElement.GetString();
+                entry.Username = usernameElement.GetString() ?? string.Empty;
 
             if (entryElement.TryGetProperty("url", out var urlElement))
-                entry.URL = urlElement.GetString();
+                entry.URL = urlElement.GetString() ?? string.Empty;
 
             if (entryElement.TryGetProperty("category", out var categoryElement))
-                entry.Category = categoryElement.GetString();
+                entry.Category = categoryElement.GetString() ?? string.Empty;
 
             // 解析时间字段
             if (entryElement.TryGetProperty("created_at", out var createdAtElement))
@@ -277,14 +280,12 @@ namespace PasswordManager.Services
             // 解密敏感字段
             if (entryElement.TryGetProperty("password", out var passwordElement))
             {
-                string encryptedPassword = passwordElement.GetString();
-                entry.Password = _cryptoManager.Decrypt(encryptedPassword);
+                entry.Password = _cryptoManager.Decrypt(passwordElement.GetString() ?? string.Empty);
             }
 
             if (entryElement.TryGetProperty("notes", out var notesElement))
             {
-                string encryptedNotes = notesElement.GetString();
-                entry.Notes = _cryptoManager.Decrypt(encryptedNotes);
+                entry.Notes = _cryptoManager.Decrypt(notesElement.GetString() ?? string.Empty);
             }
 
             return entry;

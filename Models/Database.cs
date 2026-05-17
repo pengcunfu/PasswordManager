@@ -17,6 +17,7 @@ namespace PasswordManager.Models
 
         public Database()
         {
+            _salt = string.Empty;
             _entries = new List<PasswordEntry>();
             _version = "1.0";
             _createdAt = DateTime.Now;
@@ -51,9 +52,9 @@ namespace PasswordManager.Models
             set => SetProperty(ref _createdAt, value);
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
@@ -74,9 +75,9 @@ namespace PasswordManager.Models
     /// </summary>
     public class Category : INotifyPropertyChanged
     {
-        private string _name;
-        private string _color;
-        private string _icon;
+        private string _name = string.Empty;
+        private string _color = string.Empty;
+        private string _icon = string.Empty;
 
         public string Name
         {
@@ -96,9 +97,9 @@ namespace PasswordManager.Models
             set => SetProperty(ref _icon, value);
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
@@ -155,9 +156,9 @@ namespace PasswordManager.Models
             set => SetProperty(ref _backupEnabled, value);
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }

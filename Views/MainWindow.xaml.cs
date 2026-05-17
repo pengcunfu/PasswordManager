@@ -15,9 +15,9 @@ namespace PasswordManager.Views
     {
         private readonly StorageManager _storageManager;
         private readonly string _dataDir;
-        private List<PasswordEntry> _allEntries;
-        private List<PasswordEntry> _filteredEntries;
-        private PasswordEntry _selectedEntry;
+        private List<PasswordEntry> _allEntries = [];
+        private List<PasswordEntry> _filteredEntries = [];
+        private PasswordEntry? _selectedEntry;
         private bool _isPasswordVisible;
 
         public MainWindow(StorageManager storageManager, string dataDir)
@@ -229,7 +229,7 @@ namespace PasswordManager.Views
                 FilterEntries(SearchTextBox.Text == "搜索密码..." ? "" : SearchTextBox.Text);
                 
                 // 重新选择更新后的条目
-                var updatedEntry = _filteredEntries.FirstOrDefault(e => e.Id == _selectedEntry.Id);
+                var updatedEntry = _filteredEntries.FirstOrDefault(e => e.Id == _selectedEntry!.Id);
                 if (updatedEntry != null)
                 {
                     EntryListBox.SelectedItem = updatedEntry;
