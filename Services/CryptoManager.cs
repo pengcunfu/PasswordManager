@@ -51,10 +51,12 @@ namespace PasswordManager.Services
                 saltBytes = Encoding.UTF8.GetBytes(salt);
             }
 
-            using (var pbkdf2 = new Rfc2898DeriveBytes(password, saltBytes, Pbkdf2Iterations, HashAlgorithmName.SHA256))
-            {
-                return pbkdf2.GetBytes(KeySize);
-            }
+            return Rfc2898DeriveBytes.Pbkdf2(
+                password,
+                saltBytes,
+                Pbkdf2Iterations,
+                HashAlgorithmName.SHA256,
+                KeySize);
         }
 
         /// <summary>

@@ -47,7 +47,7 @@ PasswordManager/
 
 ## 技术栈
 
-- **.NET 8.0**: 目标框架
+- **.NET 10.0**: 目标框架
 - **WPF**: Windows Presentation Foundation用户界面框架
 - **C#**: 主要编程语言
 - **System.Text.Json**: JSON序列化
@@ -57,11 +57,11 @@ PasswordManager/
 
 ### 系统要求
 - Windows 10 或更高版本
-- .NET 8.0 Runtime
+- .NET 10.0 Runtime
 
 ### 构建项目
 1. 克隆或下载项目代码
-2. 使用Visual Studio 2022或更高版本打开项目
+2. 使用 Visual Studio 2026 打开 `PasswordManager.sln`
 3. 还原NuGet包依赖
 4. 生成解决方案
 
