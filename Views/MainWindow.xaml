@@ -42,6 +42,10 @@
                       Content="备份数据"
                       Style="{StaticResource ToolbarButton}"
                       Click="BackupButton_Click"/>
+                <Button x:Name="AiAssistantButton"
+                      Content="AI 助手"
+                      Style="{StaticResource ToolbarButton}"
+                      Click="AiAssistantButton_Click"/>
                 <Button x:Name="AboutButton"
                       Content="关于"
                       Style="{StaticResource ToolbarButton}"

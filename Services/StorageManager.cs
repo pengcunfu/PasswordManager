@@ -292,16 +292,15 @@ namespace PasswordManager.Services
         }
 
         /// <summary>
-        /// 获取用户数据目录（可执行文件所在目录下的data文件夹）
+        /// 获取用户数据目录（文档/FNSoftware/PasswordManager）
         /// </summary>
         public static string GetUserDataDirectory()
         {
-            // 获取可执行文件所在目录
-            string exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            string exeDir = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory;
+            // 获取"我的文档"目录
+            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-            // 数据保存在可执行文件目录下的data子目录
-            string dataDir = Path.Combine(exeDir, "data");
+            // 数据保存在 文档/FNSoftware/PasswordManager
+            string dataDir = Path.Combine(documentsPath, "FNSoftware", "PasswordManager");
 
             // 确保目录存在
             Directory.CreateDirectory(dataDir);

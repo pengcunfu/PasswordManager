@@ -162,6 +162,13 @@ namespace PasswordManager.Views
             aboutDialog.ShowDialog();
         }
 
+        private void AiAssistantButton_Click(object sender, RoutedEventArgs e)
+        {
+            var aiChatWindow = new AiChatWindow(_storageManager, _dataDir);
+            aiChatWindow.Owner = this;
+            aiChatWindow.Show();
+        }
+
         private void LogoutButton_Click(object sender, RoutedEventArgs e)
         {
             var result = MessageBox.Show("确定要注销并返回登录界面吗？", "注销确认", 
