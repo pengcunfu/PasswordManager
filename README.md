@@ -1,138 +1,81 @@
 # 密码管家 (Password Manager)
 
-一个使用C# WPF开发的现代化密码管理应用程序，从Go语言版本重构而来。
+自托管多端密码管理器：.NET 10 服务端 + React 响应式 Web + WPF 桌面外壳。Web 与桌面共用同一套前端，桌面通过 WebView2 打开你填写的服务器地址。敏感字段（密码、备注、隐藏自定义字段）在浏览器端使用 AES-GCM 加密，服务端只保存密文。
 
-## 功能特性
-
-### 安全性
-- **AES-256加密**: 使用AES加密算法保护敏感数据
-- **PBKDF2密钥派生**: 使用PBKDF2算法从主密码派生加密密钥
-- **盐值保护**: 每个数据库使用唯一的随机盐值
-- **本地存储**: 所有数据存储在本地，不上传到云端
-
-### 用户界面
-- **现代化设计**: 采用Material Design风格的界面
-- **响应式布局**: 支持窗口大小调整
-- **直观操作**: 简洁易用的用户交互体验
-- **中文界面**: 完全中文化的用户界面
-
-### 核心功能
-- **密码存储**: 安全存储网站密码、用户名和相关信息
-- **密码生成**: 内置强密码生成器，支持自定义规则
-- **密码强度检测**: 实时显示密码强度等级
-- **搜索功能**: 快速搜索和过滤密码条目
-- **分类管理**: 支持对密码进行分类整理
-- **数据备份**: 支持手动创建数据备份
-
-## 项目结构
+## 目录结构
 
 ```
-PasswordManager/
-├── Models/                 # 数据模型
-│   ├── PasswordEntry.cs   # 密码条目实体
-│   └── Database.cs        # 数据库和其他实体
-├── Services/              # 业务服务
-│   ├── CryptoManager.cs   # 加密管理器
-│   ├── StorageManager.cs  # 存储管理器
-│   └── SampleDataService.cs # 示例数据服务
-├── Views/                 # 用户界面
-│   ├── LoginWindow.xaml   # 登录窗口
-│   ├── MainWindow.xaml    # 主窗口
-│   ├── AddEntryDialog.xaml # 添加/编辑密码对话框
-│   ├── PasswordGeneratorDialog.xaml # 密码生成器
-│   └── FirstCharConverter.cs # 转换器
-├── App.xaml              # 应用程序配置
-└── README.md             # 项目说明
+PasswordManager.Net/
+├── src/
+│   ├── PasswordManager.Api/       # ASP.NET Core 10 Web API，生产环境托管 SPA
+│   ├── PasswordManager.Web/       # Vite + React + TypeScript
+│   └── PasswordManager.Desktop/   # WPF + WebView2 外壳
+├── deploy/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── .env.example
+├── data/                          # SQLite 数据目录（本地开发 / Docker 卷）
+├── PasswordManager.slnx
+└── global.json
 ```
 
-## 技术栈
+## 本地开发
 
-- **.NET 10.0**: 目标框架
-- **WPF**: Windows Presentation Foundation用户界面框架
-- **C#**: 主要编程语言
-- **System.Text.Json**: JSON序列化
-- **System.Security.Cryptography**: 加密功能
+需要：.NET 10 SDK、Node.js 22+。桌面端还需要 Windows 与 WebView2 Runtime。
 
-## 安装和使用
+终端 1 — 启动 API（http://localhost:5080）：
 
-### 系统要求
-- Windows 10 或更高版本
-- .NET 10.0 Runtime
+```bash
+dotnet run --project src/PasswordManager.Api
+```
 
-### 构建项目
-1. 克隆或下载项目代码
-2. 使用 Visual Studio 2026 打开 `PasswordManager.sln`
-3. 还原NuGet包依赖
-4. 生成解决方案
+终端 2 — 启动前端（http://localhost:5173，`/api` 会代理到 5080）：
 
-### 首次使用
-1. 运行应用程序
-2. 首次启动时会要求设置主密码
-3. 设置完成后会自动创建示例数据
-4. 开始管理您的密码
+```bash
+cd src/PasswordManager.Web
+npm install
+npm run dev
+```
 
-### 数据存储位置
-- 用户数据存储在: `%USERPROFILE%\.password-manager\`
-- 备份文件存储在: `%USERPROFILE%\.password-manager\backups\`
+浏览器打开 `http://localhost:5173`，注册账号后即可使用。主密码用于登录，并在本地派生加密密钥。
 
-## 主要功能说明
+### 桌面端
 
-### 登录系统
-- 首次使用时需要设置主密码
-- 支持密码强度检测和提示
-- 主密码用于加密/解密所有存储的数据
+```bash
+dotnet run --project src/PasswordManager.Desktop
+```
 
-### 密码管理
-- 添加新密码条目
-- 编辑现有密码信息
-- 删除不需要的密码
-- 按分类组织密码
-- 搜索和过滤功能
+首次启动填写服务器地址：
 
-### 密码生成器
-- 可调节密码长度(8-32位)
-- 支持选择字符类型(大写、小写、数字、特殊符号)
-- 实时显示生成密码的强度
-- 一键复制到剪贴板
+- 本地前后端分离开发：`http://localhost:5173`
+- Docker / 生产（API 托管 SPA）：`http://主机:8080`
 
-### 数据安全
-- 所有敏感数据使用AES-256加密
-- 密码和备注字段单独加密
-- 支持手动创建数据备份
-- 本地存储，不依赖网络
+地址保存在 `%USERPROFILE%\Documents\FNSoftware\PasswordManager\desktop.json`。
 
-## 开发说明
+旧版单机 `passwords.json` 不会自动导入，仍位于文档目录下的原路径。
 
-这个项目是从Go语言版本重构而来的C# WPF应用程序。保持了原有的核心功能和安全特性，同时提供了更现代化的Windows用户界面体验。
+## Docker 部署
 
-### 主要改进
-- 使用WPF提供原生Windows体验
-- 采用MVVM设计模式
-- 更好的错误处理和用户反馈
-- 响应式界面设计
-- 更直观的操作流程
+```bash
+cd deploy
+copy .env.example .env
+# 编辑 .env，把 JWT_SIGNING_KEY 改成足够长的随机字符串
+docker compose up -d --build
+```
 
-## 版本历史
+访问 `http://localhost:8080`。SQLite 文件在仓库 `data/vault.db`。对外网使用时请在前面加 Caddy / Nginx / Traefik 做 HTTPS。
 
-- **v2.0** (C# WPF版本)
-  - 完全重构为C# WPF应用程序
-  - 现代化用户界面设计
-  - 改进的用户体验
-  - 更好的错误处理
+## 功能
 
-- **v1.0** (Go版本)
-  - 基础密码管理功能
-  - AES加密保护
-  - 跨平台支持
+- 多用户注册 / JWT 登录
+- 密码条目与分组 CRUD、搜索
+- 客户端字段级加密（PBKDF2 + AES-GCM）
+- 密码生成器、备份导出、关于
+- AI 助手（OpenAI 兼容接口，设置保存在服务端，工具在浏览器执行）
+- 响应式布局：PC 三栏+AI，手机列表/详情/底栏
 
-## 许可证
+## 安全说明
 
-版权所有，未经许可，不得传播！
-
-## 作者
-
-HUAQI
-
----
-
-*密码管家 - 让您的数字生活更安全*
+- 服务端不落盘明文密码字段
+- 生产环境必须通过 `Jwt__SigningKey` 注入签名密钥
+- 建议全程 HTTPS；HSTS 在反向代理开启

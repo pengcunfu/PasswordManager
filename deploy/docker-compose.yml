@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../data:/data
+    environment:
+      ConnectionStrings__Default: "Data Source=/data/vault.db"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:-please-change-this-signing-key-32chars}"
+      ASPNETCORE_URLS: "http://+:8080"
+    restart: unless-stopped
