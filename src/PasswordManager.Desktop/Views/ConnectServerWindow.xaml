@@ -18,7 +18,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="密码管家" FontSize="22" FontWeight="SemiBold" Foreground="#1a1a2e"/>
+        <TextBlock Text="凭据管理器" FontSize="22" FontWeight="SemiBold" Foreground="#1a1a2e"/>
         <TextBlock Grid.Row="1" Margin="0,6,0,18" Foreground="#888"
                    Text="填写服务端地址后即可登录，与 Web 端共用同一套界面。"/>
 

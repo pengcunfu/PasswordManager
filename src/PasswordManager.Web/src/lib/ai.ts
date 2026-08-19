@@ -3,7 +3,7 @@ import { api } from './api'
 import { generatePassword } from './password'
 import { encryptEntryPayload } from './vault'
 
-const SYSTEM_PROMPT = `你是"密码管家"AI 助手，帮助用户管理他们的密码和账户信息。
+const SYSTEM_PROMPT = `你是"凭据管理器"AI 助手，帮助用户管理他们的密码和账户信息。
 
 ## 你的能力
 - 搜索、查看、添加、修改、删除密码条目

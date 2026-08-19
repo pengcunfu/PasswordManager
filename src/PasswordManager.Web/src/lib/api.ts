@@ -105,6 +105,12 @@ export const api = {
 
   backup: () => request<unknown>('/api/vault/backup'),
 
+  importVault: (body: unknown) =>
+    request<{ groupsCreated: number; entriesImported: number; entriesSkipped: number }>(
+      '/api/vault/import',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
   about: () => request<AboutInfo>('/api/vault/about'),
 
   testAi: (body: unknown) =>

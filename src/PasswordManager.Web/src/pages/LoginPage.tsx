@@ -43,7 +43,7 @@ export function LoginPage() {
     <div className="login-page">
       <form className="login-box" onSubmit={onSubmit}>
         <div className="icon">🔒</div>
-        <h1>密码管家</h1>
+        <h1>凭据管理器</h1>
         <div className="subtitle">
           {mode === 'login' ? '输入主密码以解锁您的密码库' : '创建账号，主密码用于派生加密密钥'}
         </div>

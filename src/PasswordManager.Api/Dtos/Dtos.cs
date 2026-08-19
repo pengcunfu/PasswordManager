@@ -85,8 +85,32 @@ public record VaultBackupDto(
     string Version,
     DateTime ExportedAt,
     string Username,
+    string KdfSalt,
     List<GroupDto> Groups,
     List<EntryDto> Entries);
+
+public record ImportVaultRequest(
+    bool SkipDuplicates,
+    List<ImportGroupItem>? Groups,
+    List<ImportEntryItem>? Entries);
+
+public record ImportGroupItem(
+    [Required, MaxLength(128)] string Name,
+    string? Description,
+    string? Color,
+    int SortOrder);
+
+public record ImportEntryItem(
+    [Required, MaxLength(256)] string Title,
+    string? Username,
+    string? Password,
+    string? Url,
+    string? Notes,
+    string? Category,
+    string? GroupName,
+    List<CustomFieldDto>? CustomFields);
+
+public record ImportResultDto(int GroupsCreated, int EntriesImported, int EntriesSkipped);
 
 public record AiTestRequest(string? ApiEndpoint, string? ApiKey, string? Model);
 

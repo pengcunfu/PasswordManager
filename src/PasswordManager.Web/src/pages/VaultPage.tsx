@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { api } from '../lib/api'
 import { runAiChat, type ChatMessage } from '../lib/ai'
 import { checkStrength, generatePassword } from '../lib/password'
+import { buildImportPayload, decryptDetected, detectImport, type DetectedImport } from '../lib/import'
 import { decryptEntry, encryptEntryPayload } from '../lib/vault'
 import { useSession } from '../context/SessionContext'
 import type { AboutInfo, CustomField, Entry, Group, Settings } from '../types'
@@ -40,6 +41,7 @@ export function VaultPage() {
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const [groupEditor, setGroupEditor] = useState<Partial<Group> | null>(null)
+  const [showImport, setShowImport] = useState(false)
 
   const showToast = (msg: string, type: Toast['type'] = 'success') => {
     setToast({ msg, type })
@@ -200,10 +202,11 @@ export function VaultPage() {
     <div className="app-shell">
       <div className="toolbar">
         <button className="menu-btn icon-btn" onClick={() => setShowGroups(true)}>☰</button>
-        <div className="toolbar-title"><span>密码管家</span></div>
+        <div className="toolbar-title"><span>凭据管理器</span></div>
         <div className="toolbar-right">
           <button className="hide-sm" onClick={() => { setGenTarget('modal'); setShowGen(true) }}>密码生成器</button>
           <button className="hide-sm" onClick={() => api.about().then(setAbout)}>关于</button>
+          <button className="hide-sm" onClick={() => setShowImport(true)}>导入</button>
           <button className="hide-sm" onClick={() => doBackup().catch((e) => showToast(e.message, 'error'))}>备份</button>
           <button onClick={() => logout()}>注销</button>
         </div>
@@ -331,6 +334,7 @@ export function VaultPage() {
         <button className={pane !== 'ai' ? 'active' : ''} onClick={() => setPane('list')}>密码</button>
         <button className={pane === 'ai' ? 'active' : ''} onClick={() => setPane('ai')}>AI</button>
         <button onClick={() => { setGenTarget('modal'); setShowGen(true) }}>生成器</button>
+        <button onClick={() => setShowImport(true)}>导入</button>
         <button onClick={() => doBackup().catch((e) => showToast(e.message, 'error'))}>备份</button>
       </div>
 
@@ -348,6 +352,18 @@ export function VaultPage() {
             if (genTarget === 'form' && editing) setEditing({ ...editing, password: pwd })
             else copyText(pwd)
             setShowGen(false)
+          }}
+        />
+      )}
+
+      {showImport && (
+        <ImportModal
+          vaultKey={key}
+          onClose={() => setShowImport(false)}
+          onDone={async (msg) => {
+            setShowImport(false)
+            showToast(msg)
+            await reload()
           }}
         />
       )}
@@ -609,7 +625,7 @@ function AiPanel({
       <div className="chat-messages">
         {bubbles.length === 0 && (
           <div className="chat-welcome">
-            <div>你好！我是密码管家 AI 助手</div>
+            <div>你好！我是凭据管理器 AI 助手</div>
             <div>用自然语言管理你的密码</div>
             <div style={{ marginTop: 8, textAlign: 'left', display: 'inline-block', fontSize: 12, color: '#ccc' }}>
               • 帮我查看 GitHub 的密码<br />
@@ -639,6 +655,104 @@ function AiPanel({
           onKeyDown={(e) => { if (e.key === 'Enter') send() }}
         />
         <button disabled={busy} onClick={send}>发送</button>
+      </div>
+    </div>
+  )
+}
+
+function ImportModal({
+  vaultKey,
+  onClose,
+  onDone,
+}: {
+  vaultKey: CryptoKey
+  onClose: () => void
+  onDone: (msg: string) => Promise<void>
+}) {
+  const [detected, setDetected] = useState<DetectedImport | null>(null)
+  const [fileName, setFileName] = useState('')
+  const [legacyPassword, setLegacyPassword] = useState('')
+  const [skipDuplicates, setSkipDuplicates] = useState(true)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function onFile(file: File) {
+    setError('')
+    setDetected(null)
+    setFileName(file.name)
+    try {
+      const text = await file.text()
+      setDetected(detectImport(text))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '无法解析文件')
+    }
+  }
+
+  async function submit() {
+    if (!detected) {
+      setError('请先选择文件')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      const plain = await decryptDetected(detected, vaultKey, legacyPassword)
+      const payload = await buildImportPayload(detected.groups, plain, vaultKey, skipDuplicates)
+      const result = await api.importVault(payload)
+      await onDone(`导入完成：新增 ${result.entriesImported} 条，跳过 ${result.entriesSkipped} 条，分组 ${result.groupsCreated} 个`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '导入失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <h2>导入密码</h2>
+        <p style={{ color: '#888', marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}>
+          支持本应用备份 JSON、旧版本地密码库、Bitwarden 未加密 JSON，以及 Chrome / Firefox / 通用 CSV。
+        </p>
+        <div className="form-row">
+          <label>选择文件</label>
+          <input
+            type="file"
+            accept=".json,.csv,text/csv,application/json"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void onFile(file)
+            }}
+          />
+        </div>
+        {fileName && detected && (
+          <p style={{ marginBottom: 12 }}>
+            已识别：<strong>{detected.format}</strong>，{detected.entries.length} 条密码
+            {detected.groups.length ? `，${detected.groups.length} 个分组` : ''}
+          </p>
+        )}
+        {(detected?.needsPassword || detected?.encrypted) && (
+          <div className="form-row">
+            <label>{detected.needsPassword ? '原主密码（必填）' : '原主密码（如备份来自其他主密码）'}</label>
+            <input
+              type="password"
+              value={legacyPassword}
+              placeholder={detected.needsPassword ? '旧版密码库的主密码' : '当前主密码可留空'}
+              onChange={(e) => setLegacyPassword(e.target.value)}
+            />
+          </div>
+        )}
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+          <input type="checkbox" checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} />
+          跳过标题和用户名相同的重复条目
+        </label>
+        {error && <div className="error" style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div>}
+        <div className="form-actions">
+          <button className="btn-primary" disabled={busy || !detected} onClick={() => void submit()}>
+            {busy ? '导入中...' : '开始导入'}
+          </button>
+          <button className="btn-secondary" onClick={onClose}>取消</button>
+        </div>
       </div>
     </div>
   )

@@ -17,7 +17,7 @@ function Gate() {
       <div className="login-page">
         <div className="login-box">
           <div className="icon">🔒</div>
-          <h1>密码管家</h1>
+          <h1>凭据管理器</h1>
           <div className="subtitle">正在恢复会话...</div>
         </div>
       </div>

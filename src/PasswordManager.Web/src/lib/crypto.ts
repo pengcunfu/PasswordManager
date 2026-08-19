@@ -59,6 +59,34 @@ export async function encryptText(key: CryptoKey, plaintext: string): Promise<st
   return bytesToBase64(packed)
 }
 
+export async function deriveCbcKey(password: string, saltB64: string): Promise<CryptoKey> {
+  const salt = base64ToBytes(saltB64)
+  const material = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  )
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: salt.buffer, iterations: ITERATIONS, hash: 'SHA-256' },
+    material,
+    { name: 'AES-CBC', length: KEY_LENGTH },
+    false,
+    ['decrypt'],
+  )
+}
+
+export async function decryptAesCbc(key: CryptoKey, ciphertext: string): Promise<string> {
+  if (!ciphertext) return ''
+  const packed = base64ToBytes(ciphertext)
+  if (packed.length <= 16) throw new Error('密文无效')
+  const iv = packed.slice(0, 16)
+  const data = packed.slice(16)
+  const plain = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: iv.buffer }, key, data.buffer)
+  return textDecoder.decode(plain)
+}
+
 export async function decryptText(key: CryptoKey, ciphertext: string): Promise<string> {
   if (!ciphertext) return ''
   const packed = base64ToBytes(ciphertext)
