@@ -1,34 +1,38 @@
-import type { Entry } from '../types'
+import type { ItemType, VaultDoc } from '../types'
 import { api } from './api'
 import { generatePassword } from './password'
-import { encryptEntryPayload } from './vault'
+import { cloneVault, emptyAccount, emptyItem, findItemByKey, nowIso } from './vault'
 
-const SYSTEM_PROMPT = `你是"凭据管理器"AI 助手，帮助用户管理他们的密码和账户信息。
+const SYSTEM_PROMPT = `你是"凭据管理器"AI 助手，帮助用户管理他们的登录账号、凭据、密钥和备忘。
+
+## 数据模型
+- 一个「条目」对应一个网站/服务（如 GitHub、QQ），可包含多个账号
+- 同一网址下的多个账号属于同一个条目（例如 8 个 GitHub 账号）
+- 条目类型：login（登录账号）、credential（凭据密码）、key（密钥/Key）、note（备忘）
 
 ## 你的能力
-- 搜索、查看、添加、修改、删除密码条目
+- 搜索、查看、添加、修改、删除条目和账号
 - 生成安全的随机密码
-- 列出所有密码分类
-- 管理自定义字段（邮箱、手机号、密保手机、密保问题等）
+- 列出所有分类
 
 ## 回复规则
 - 使用中文回复
 - 回复简洁明了
-- 当需要删除密码时，提醒用户确认
-- 当需要展示密码时，使用特殊格式：[PASSWORD:实际密码内容]
+- 删除前提醒用户确认
+- 展示密码/密钥时使用：[PASSWORD:实际内容]
 - 除此之外不要在回复中出现任何密码明文
 - 自定义字段中的隐藏字段显示为 ••••••••
 
-## 查找密码
-- 用户要求查看某个密码时，先用 search_passwords 搜索
+## 查找
+- 用户要求查看某个密码时，先用 search_vault 搜索
 - 不要要求用户提供精确标题`
 
 export const AI_TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'search_passwords',
-      description: '搜索密码条目。根据关键词搜索标题、用户名、网址、分类。',
+      name: 'search_vault',
+      description: '搜索凭据库。按标题、网址、用户名、分类、账号备注搜索。',
       parameters: {
         type: 'object',
         properties: { keyword: { type: 'string', description: '搜索关键词' } },
@@ -39,11 +43,34 @@ export const AI_TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'get_password',
-      description: '获取指定密码条目的详细信息。根据标题匹配。',
+      name: 'get_item',
+      description: '获取指定条目的详细信息（含全部账号）。按标题或网址匹配。',
       parameters: {
         type: 'object',
-        properties: { title: { type: 'string', description: '密码条目标题' } },
+        properties: {
+          title: { type: 'string', description: '条目标题' },
+          url: { type: 'string', description: '网址' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_account',
+      description: '添加账号。若已有相同网址或标题的条目，会把账号加到该条目下（支持同一网站多个账号）。否则新建条目。',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: '条目标题，如 GitHub、QQ' },
+          url: { type: 'string' },
+          type: { type: 'string', description: 'login | credential | key | note' },
+          label: { type: 'string', description: '账号别名，如 工作号、个人号' },
+          username: { type: 'string' },
+          secret: { type: 'string', description: '密码、凭据或密钥内容' },
+          notes: { type: 'string' },
+          category: { type: 'string' },
+        },
         required: ['title'],
       },
     },
@@ -51,27 +78,8 @@ export const AI_TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'add_password',
-      description: '添加新的密码条目。',
-      parameters: {
-        type: 'object',
-        properties: {
-          title: { type: 'string' },
-          username: { type: 'string' },
-          password: { type: 'string' },
-          url: { type: 'string' },
-          notes: { type: 'string' },
-          category: { type: 'string' },
-        },
-        required: ['title', 'username', 'password'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'delete_password',
-      description: '删除密码条目。',
+      name: 'delete_item',
+      description: '删除整个条目（含其下全部账号）。',
       parameters: {
         type: 'object',
         properties: { id: { type: 'string' } },
@@ -83,7 +91,7 @@ export const AI_TOOLS = [
     type: 'function',
     function: {
       name: 'list_categories',
-      description: '列出所有密码分类。',
+      description: '列出所有分类。',
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -108,12 +116,12 @@ type ChatMessage = Record<string, unknown>
 export async function runAiChat(options: {
   userMessage: string
   history: ChatMessage[]
-  entries: Entry[]
-  key: CryptoKey
+  vault: VaultDoc
+  persist: (vault: VaultDoc) => Promise<void>
   settings: { aiModel: string; aiMaxTokens: number; aiTemperature: number }
   onChunk: (text: string) => void
   onTool: (status: string) => void
-  onEntriesChanged: () => Promise<void>
+  onVaultChanged: () => Promise<void>
 }): Promise<string> {
   const messages: ChatMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT },
@@ -121,7 +129,7 @@ export async function runAiChat(options: {
     { role: 'user', content: options.userMessage },
   ]
 
-  let entries = options.entries
+  let vault = options.vault
   let full = ''
 
   for (let round = 0; round < 6; round++) {
@@ -141,9 +149,10 @@ export async function runAiChat(options: {
 
     for (const tc of result.toolCalls) {
       options.onTool(`正在执行: ${toolLabel(tc.name)}...`)
-      const output = await executeTool(tc.name, tc.arguments, entries, options.key)
-      if (tc.name === 'add_password' || tc.name === 'delete_password') {
-        await options.onEntriesChanged()
+      const { output, vault: nextVault } = await executeTool(tc.name, tc.arguments, vault, options.persist)
+      vault = nextVault
+      if (tc.name === 'add_account' || tc.name === 'delete_item') {
+        await options.onVaultChanged()
       }
       messages.push({ role: 'tool', tool_call_id: tc.id, content: output })
     }
@@ -220,77 +229,108 @@ async function streamCompletion(
 async function executeTool(
   name: string,
   argsJson: string,
-  entries: Entry[],
-  key: CryptoKey,
-): Promise<string> {
+  vault: VaultDoc,
+  persist: (next: VaultDoc) => Promise<void>,
+): Promise<{ output: string; vault: VaultDoc }> {
   let args: Record<string, unknown> = {}
   try {
     args = JSON.parse(argsJson || '{}')
   } catch {
-    return JSON.stringify({ error: '参数无法解析' })
+    return { output: JSON.stringify({ error: '参数无法解析' }), vault }
   }
 
   switch (name) {
-    case 'search_passwords': {
+    case 'search_vault': {
       const keyword = String(args.keyword ?? '').toLowerCase()
-      const results = entries
-        .filter((e) =>
-          [e.title, e.username, e.url, e.category, e.notes].some((v) =>
-            (v || '').toLowerCase().includes(keyword),
-          ),
-        )
-        .map((e) => ({
-          id: e.id,
-          title: e.title,
-          username: e.username,
-          url: e.url,
-          category: e.category,
+      const results = vault.items
+        .filter((item) => matches(item, keyword))
+        .map((item) => ({
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          url: item.url,
+          category: item.category,
+          accounts: item.accounts.map((a) => ({ label: a.label, username: a.username })),
         }))
-      return JSON.stringify({ count: results.length, results })
+      return { output: JSON.stringify({ count: results.length, results }), vault }
     }
-    case 'get_password': {
+    case 'get_item': {
       const title = String(args.title ?? '')
-      const entry =
-        entries.find((e) => e.title.toLowerCase() === title.toLowerCase()) ||
-        entries.find((e) => e.title.toLowerCase().includes(title.toLowerCase()))
-      if (!entry) return JSON.stringify({ error: `未找到 ${title}` })
-      return JSON.stringify({
-        id: entry.id,
-        title: entry.title,
-        username: entry.username,
-        password: entry.password,
-        url: entry.url,
-        category: entry.category,
-        notes: entry.notes,
-        custom_fields: entry.customFields.map((f) => ({
-          key: f.key,
-          value: f.isHidden ? '••••••••' : f.value,
-          isHidden: f.isHidden,
-        })),
-      })
+      const url = String(args.url ?? '')
+      const item = vault.items.find((i) =>
+        (url && i.url.toLowerCase().includes(url.toLowerCase()))
+        || (title && i.title.toLowerCase() === title.toLowerCase()),
+      ) || vault.items.find((i) => title && i.title.toLowerCase().includes(title.toLowerCase()))
+      if (!item) return { output: JSON.stringify({ error: `未找到 ${title || url}` }), vault }
+      return {
+        output: JSON.stringify({
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          url: item.url,
+          category: item.category,
+          notes: item.notes,
+          accounts: item.accounts.map((a) => ({
+            id: a.id,
+            label: a.label,
+            username: a.username,
+            secret: a.secret,
+            notes: a.notes,
+            fields: a.fields.map((f) => ({
+              key: f.key,
+              value: f.isHidden ? '••••••••' : f.value,
+              isHidden: f.isHidden,
+            })),
+          })),
+        }),
+        vault,
+      }
     }
-    case 'add_password': {
-      const payload = await encryptEntryPayload(key, {
-        title: String(args.title ?? ''),
-        username: String(args.username ?? ''),
-        password: String(args.password ?? ''),
-        url: String(args.url ?? ''),
-        notes: String(args.notes ?? ''),
-        category: String(args.category ?? ''),
-        groupId: null,
-        customFields: [],
-      })
-      const created = await api.createEntry(payload)
-      return JSON.stringify({ success: true, id: created.id, message: `已添加 ${created.title}` })
+    case 'add_account': {
+      const next = cloneVault(vault)
+      const title = String(args.title ?? '').trim()
+      const url = String(args.url ?? '')
+      const type = (['login', 'credential', 'key', 'note'].includes(String(args.type))
+        ? String(args.type)
+        : 'login') as ItemType
+      let item = findItemByKey(next, url, title)
+      if (!item) {
+        item = emptyItem()
+        item.title = title || '未命名'
+        item.url = url
+        item.type = type
+        item.category = String(args.category ?? '')
+        item.accounts = []
+        next.items.push(item)
+      }
+      const acc = emptyAccount()
+      acc.label = String(args.label ?? args.username ?? '默认')
+      acc.username = String(args.username ?? '')
+      acc.secret = String(args.secret ?? args.password ?? '')
+      acc.notes = String(args.notes ?? '')
+      item.accounts.push(acc)
+      item.updatedAt = nowIso()
+      await persist(next)
+      return {
+        output: JSON.stringify({
+          success: true,
+          itemId: item.id,
+          accountId: acc.id,
+          message: `已将账号加入「${item.title}」，当前共 ${item.accounts.length} 个账号`,
+        }),
+        vault: next,
+      }
     }
-    case 'delete_password': {
+    case 'delete_item': {
       const id = String(args.id ?? '')
-      await api.deleteEntry(id)
-      return JSON.stringify({ success: true, message: '已删除' })
+      const next = cloneVault(vault)
+      next.items = next.items.filter((i) => i.id !== id)
+      await persist(next)
+      return { output: JSON.stringify({ success: true, message: '已删除' }), vault: next }
     }
     case 'list_categories': {
-      const categories = [...new Set(entries.map((e) => e.category).filter(Boolean))]
-      return JSON.stringify({ categories })
+      const categories = [...new Set(vault.items.map((e) => e.category).filter(Boolean))]
+      return { output: JSON.stringify({ categories }), vault }
     }
     case 'generate_password': {
       const length = Number(args.length ?? 16)
@@ -302,19 +342,31 @@ async function executeTool(
         digits: true,
         symbols: includeSymbols,
       })
-      return JSON.stringify({ password })
+      return { output: JSON.stringify({ password }), vault }
     }
     default:
-      return JSON.stringify({ error: `未知工具: ${name}` })
+      return { output: JSON.stringify({ error: `未知工具: ${name}` }), vault }
   }
+}
+
+function matches(item: VaultDoc['items'][number], keyword: string) {
+  if (!keyword) return true
+  const hay = [
+    item.title,
+    item.url,
+    item.category,
+    item.notes,
+    ...item.accounts.flatMap((a) => [a.label, a.username, a.notes]),
+  ]
+  return hay.some((v) => (v || '').toLowerCase().includes(keyword))
 }
 
 function toolLabel(name: string) {
   const map: Record<string, string> = {
-    search_passwords: '搜索密码',
-    get_password: '获取密码',
-    add_password: '添加密码',
-    delete_password: '删除密码',
+    search_vault: '搜索凭据',
+    get_item: '查看条目',
+    add_account: '添加账号',
+    delete_item: '删除条目',
     list_categories: '列出分类',
     generate_password: '生成密码',
   }

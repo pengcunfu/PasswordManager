@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 using PasswordManager.Api.Dtos;
 using PasswordManager.Api.Services;
@@ -12,7 +13,8 @@ namespace PasswordManager.Api.Controllers;
 [EnableRateLimiting("auth")]
 public class AuthController(AuthService auth) : ControllerBase
 {
-    private const string RefreshCookie = "pm_refresh";
+    private const string ActiveRefreshCookie = "pm_refresh";
+    private const string RefreshCookiePrefix = "pm_refresh_";
 
     [HttpGet("prelogin")]
     [AllowAnonymous]
@@ -35,7 +37,7 @@ public class AuthController(AuthService auth) : ControllerBase
         try
         {
             var response = await auth.RegisterAsync(request, ct);
-            SetRefreshCookie(auth.LastRefreshToken!);
+            SetRefreshCookies(response.UserId, auth.LastRefreshToken!);
             return Ok(response);
         }
         catch (InvalidOperationException ex)
@@ -51,7 +53,7 @@ public class AuthController(AuthService auth) : ControllerBase
         try
         {
             var response = await auth.LoginAsync(request, ct);
-            SetRefreshCookie(auth.LastRefreshToken!);
+            SetRefreshCookies(response.UserId, auth.LastRefreshToken!);
             return Ok(response);
         }
         catch (UnauthorizedAccessException ex)
@@ -62,34 +64,56 @@ public class AuthController(AuthService auth) : ControllerBase
 
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public async Task<ActionResult<AuthResponse>> Refresh(CancellationToken ct)
+    public async Task<ActionResult<AuthResponse>> Refresh(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RefreshRequest? request,
+        CancellationToken ct)
     {
-        var token = Request.Cookies[RefreshCookie];
+        var token = ReadRefreshCookie(request?.UserId);
         if (string.IsNullOrEmpty(token))
             return Unauthorized(new ErrorResponse { Error = "未登录" });
 
         try
         {
             var (response, refresh) = await auth.RefreshAsync(token, ct);
-            SetRefreshCookie(refresh);
+            SetRefreshCookies(response.UserId, refresh);
             return Ok(response);
         }
         catch (UnauthorizedAccessException ex)
         {
-            ClearRefreshCookie();
+            if (request?.UserId is Guid id)
+                DeleteRefreshCookies(id);
+            else
+                DeleteCookie(ActiveRefreshCookie);
             return Unauthorized(new ErrorResponse { Error = ex.Message });
         }
     }
 
     [HttpPost("logout")]
     [AllowAnonymous]
-    public async Task<IActionResult> Logout(CancellationToken ct)
+    public async Task<IActionResult> Logout(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] LogoutRequest? request,
+        CancellationToken ct)
     {
-        var token = Request.Cookies[RefreshCookie];
+        if (request?.All == true)
+        {
+            foreach (var name in RefreshCookieNames())
+            {
+                if (!string.IsNullOrEmpty(Request.Cookies[name]))
+                    await auth.RevokeAsync(Request.Cookies[name]!, ct);
+                DeleteCookie(name);
+            }
+            return NoContent();
+        }
+
+        var token = ReadRefreshCookie(request?.UserId);
         if (!string.IsNullOrEmpty(token))
             await auth.RevokeAsync(token, ct);
 
-        ClearRefreshCookie();
+        if (request?.UserId is Guid userId)
+            DeleteRefreshCookies(userId);
+        else
+            DeleteCookie(ActiveRefreshCookie);
+
         return NoContent();
     }
 
@@ -104,23 +128,53 @@ public class AuthController(AuthService auth) : ControllerBase
         });
     }
 
-    private void SetRefreshCookie(string token)
+    private string? ReadRefreshCookie(Guid? userId)
     {
-        Response.Cookies.Append(RefreshCookie, token, new CookieOptions
+        if (userId is Guid id)
         {
-            HttpOnly = true,
-            Secure = Request.IsHttps,
-            SameSite = SameSiteMode.Lax,
-            Path = "/api/auth",
-            Expires = DateTimeOffset.UtcNow.AddDays(14)
-        });
+            var named = Request.Cookies[CookieName(id)];
+            if (!string.IsNullOrEmpty(named))
+                return named;
+        }
+        return Request.Cookies[ActiveRefreshCookie];
     }
 
-    private void ClearRefreshCookie()
+    private void SetRefreshCookies(Guid userId, string token)
     {
-        Response.Cookies.Delete(RefreshCookie, new CookieOptions
+        var options = CookieOptions();
+        options.Expires = DateTimeOffset.UtcNow.AddDays(14);
+        Response.Cookies.Append(CookieName(userId), token, options);
+        Response.Cookies.Append(ActiveRefreshCookie, token, options);
+    }
+
+    private void DeleteRefreshCookies(Guid userId)
+    {
+        DeleteCookie(CookieName(userId));
+        DeleteCookie(ActiveRefreshCookie);
+    }
+
+    private void DeleteCookie(string name)
+    {
+        Response.Cookies.Delete(name, new CookieOptions { Path = "/api/auth" });
+    }
+
+    private CookieOptions CookieOptions() => new()
+    {
+        HttpOnly = true,
+        Secure = Request.IsHttps,
+        SameSite = SameSiteMode.Lax,
+        Path = "/api/auth"
+    };
+
+    private static string CookieName(Guid userId) => $"{RefreshCookiePrefix}{userId:N}";
+
+    private IEnumerable<string> RefreshCookieNames()
+    {
+        yield return ActiveRefreshCookie;
+        foreach (var key in Request.Cookies.Keys)
         {
-            Path = "/api/auth"
-        });
+            if (key.StartsWith(RefreshCookiePrefix, StringComparison.OrdinalIgnoreCase))
+                yield return key;
+        }
     }
 }

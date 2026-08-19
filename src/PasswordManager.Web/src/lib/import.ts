@@ -1,6 +1,6 @@
-import type { CustomField } from '../types'
+import type { CustomField, VaultDoc } from '../types'
 import { decryptAesCbc, decryptText, deriveCbcKey, deriveKey } from './crypto'
-import { encryptEntryPayload } from './vault'
+import { decryptVault, emptyGroup, newId, nowIso, parseVault } from './vault'
 
 export type ImportPlainEntry = {
   title: string
@@ -28,30 +28,18 @@ export type DetectedImport = {
   legacySalt?: string
   kdfSalt?: string
   encrypted?: boolean
-}
-
-export type ImportPayload = {
-  skipDuplicates: boolean
-  groups: ImportPlainGroup[]
-  entries: Array<{
-    title: string
-    username: string
-    password: string
-    url: string
-    notes: string
-    category: string
-    groupName: string | null
-    customFields: CustomField[]
-  }>
+  vault?: VaultDoc
 }
 
 export function detectImport(text: string): DetectedImport {
   const trimmed = text.trim()
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     const json = JSON.parse(trimmed) as Record<string, unknown>
-    if (json.items && Array.isArray(json.items)) return parseBitwarden(json)
+    if (json.document && typeof json.document === 'object') return parseVaultBackup(json)
+    if (looksLikeVaultDoc(json)) return parseVaultDoc(json)
     if (json.entries && json.salt && !json.exportedAt) return parseLegacy(json)
     if (json.entries) return parseBackup(json)
+    if (Array.isArray(json.items)) return parseBitwarden(json)
     throw new Error('无法识别该 JSON 文件格式')
   }
   return parseCsv(trimmed)
@@ -96,31 +84,216 @@ export async function decryptDetected(
   }
 }
 
-export async function buildImportPayload(
+export async function decryptDetectedVault(
+  detected: DetectedImport,
+  currentKey: CryptoKey,
+  originalPassword?: string,
+): Promise<VaultDoc> {
+  if (!detected.vault) throw new Error('文件不是凭据库文档')
+  if (!detected.encrypted) return detected.vault
+
+  const sample = detected.vault.items.flatMap((i) => i.accounts).find((a) => a.secret)
+  let key = currentKey
+  const pwd = originalPassword?.trim()
+
+  if (sample) {
+    try {
+      await decryptText(currentKey, sample.secret)
+    } catch {
+      if (!detected.kdfSalt) throw new Error('无法解密该备份，请确认是用当前账号导出的文件')
+      if (!pwd) throw new Error('该备份使用其他主密码加密，请输入原主密码')
+      key = await deriveKey(pwd, detected.kdfSalt)
+      await decryptText(key, sample.secret)
+    }
+  }
+
+  return decryptVault(key, detected.vault)
+}
+
+export function mergeEntries(
+  current: VaultDoc,
   groups: ImportPlainGroup[],
   entries: ImportPlainEntry[],
-  currentKey: CryptoKey,
   skipDuplicates: boolean,
-): Promise<ImportPayload> {
-  const encrypted = []
+): { vault: VaultDoc; imported: number; skipped: number } {
+  const incoming = entriesToVault(groups, entries)
+  return mergeVaultDocs(current, incoming, skipDuplicates)
+}
+
+export function mergeVaultDocs(
+  current: VaultDoc,
+  incoming: VaultDoc,
+  skipDuplicates: boolean,
+): { vault: VaultDoc; imported: number; skipped: number } {
+  const vault: VaultDoc = structuredClone(current)
+  vault.version = '4.0'
+
+  const groupIdByName = new Map(vault.groups.map((g) => [g.name.toLowerCase(), g.id]))
+  const incomingGroupName = new Map(incoming.groups.map((g) => [g.id, g.name]))
+
+  for (const g of incoming.groups) {
+    if (!g.name) continue
+    const key = g.name.toLowerCase()
+    if (groupIdByName.has(key)) continue
+    const created = emptyGroup(g.name)
+    created.description = g.description || ''
+    created.color = g.color || created.color
+    created.sortOrder = g.sortOrder
+    vault.groups.push(created)
+    groupIdByName.set(key, created.id)
+  }
+
+  let imported = 0
+  let skipped = 0
+
+  for (const item of incoming.items) {
+    const groupName = item.groupId ? incomingGroupName.get(item.groupId) : undefined
+    const groupId = groupName ? groupIdByName.get(groupName.toLowerCase()) ?? null : item.groupId
+    let target = findExistingItem(vault, item.url, item.title)
+    if (!target) {
+      target = {
+        ...item,
+        id: newId(),
+        groupId: groupId ?? null,
+        accounts: [],
+        createdAt: item.createdAt || nowIso(),
+        updatedAt: nowIso(),
+      }
+      vault.items.push(target)
+    } else if (groupId && !target.groupId) {
+      target.groupId = groupId
+    }
+
+    for (const acc of item.accounts) {
+      const username = (acc.username || '').trim().toLowerCase()
+      const dup = skipDuplicates && username
+        && target.accounts.some((a) => a.username.trim().toLowerCase() === username)
+      if (dup) {
+        skipped++
+        continue
+      }
+      target.accounts.push({
+        ...acc,
+        id: newId(),
+        fields: acc.fields ?? [],
+      })
+      imported++
+      target.updatedAt = nowIso()
+    }
+
+    if (target.accounts.length === 0) {
+      vault.items = vault.items.filter((i) => i.id !== target.id)
+    }
+  }
+
+  return { vault, imported, skipped }
+}
+
+function entriesToVault(groups: ImportPlainGroup[], entries: ImportPlainEntry[]): VaultDoc {
+  const vault: VaultDoc = { version: '4.0', groups: [], items: [] }
+  const groupIdByName = new Map<string, string>()
+  for (const g of groups) {
+    if (!g.name) continue
+    const created = emptyGroup(g.name)
+    created.description = g.description || ''
+    created.color = g.color || created.color
+    created.sortOrder = g.sortOrder
+    vault.groups.push(created)
+    groupIdByName.set(g.name.toLowerCase(), created.id)
+  }
+
+  const buckets = new Map<string, ImportPlainEntry[]>()
   for (const entry of entries) {
-    if (!entry.title.trim()) continue
-    const payload = await encryptEntryPayload(currentKey, {
-      title: entry.title.trim(),
-      username: entry.username,
-      password: entry.password,
-      url: entry.url,
-      notes: entry.notes,
-      category: entry.category,
-      groupId: null,
-      customFields: entry.customFields,
-    })
-    encrypted.push({
-      ...payload,
-      groupName: entry.groupName,
+    if (!entry.title.trim() && !entry.url.trim()) continue
+    const key = `${(entry.url || '').trim().toLowerCase() || `title:${entry.title.trim().toLowerCase()}`}`
+    const list = buckets.get(key) ?? []
+    list.push(entry)
+    buckets.set(key, list)
+  }
+
+  for (const [, list] of buckets) {
+    const url = list[0]!.url
+    const title = pickImportedTitle(list, url)
+    const first = list[0]!
+    vault.items.push({
+      id: newId(),
+      type: 'login',
+      title,
+      url,
+      groupId: first.groupName ? groupIdByName.get(first.groupName.toLowerCase()) ?? null : null,
+      category: first.category || '',
+      notes: '',
+      accounts: list.map((e) => ({
+        id: newId(),
+        label: e.title !== title && e.title ? e.title : (e.username || '默认'),
+        username: e.username,
+        secret: e.password,
+        notes: e.notes,
+        fields: e.customFields,
+      })),
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
     })
   }
-  return { skipDuplicates, groups, entries: encrypted }
+  return vault
+}
+
+function findExistingItem(vault: VaultDoc, url: string, title: string) {
+  const u = (url || '').trim().toLowerCase()
+  if (u) return vault.items.find((i) => (i.url || '').trim().toLowerCase() === u)
+  const t = (title || '').trim().toLowerCase()
+  return vault.items.find((i) => !(i.url || '').trim() && (i.title || '').trim().toLowerCase() === t)
+}
+
+function pickImportedTitle(list: ImportPlainEntry[], url: string) {
+  const titles = list.map((e) => e.title.trim()).filter(Boolean)
+  if (titles.length === 0) return hostFromUrl(url) || '未命名'
+  const unique = [...new Set(titles.map((t) => t.toLowerCase()))]
+  if (unique.length === 1) return titles[0]!
+  return titles.sort((a, b) => a.length - b.length)[0]!
+}
+
+function looksLikeVaultDoc(json: Record<string, unknown>) {
+  if (!Array.isArray(json.items)) return false
+  if (String(json.version ?? '').startsWith('4')) return true
+  const first = json.items[0] as Record<string, unknown> | undefined
+  return Array.isArray(first?.accounts)
+}
+
+function parseVaultBackup(json: Record<string, unknown>): DetectedImport {
+  const vault = parseVault(json.document)
+  return {
+    format: '凭据管理器备份',
+    groups: vault.groups.map((g) => ({
+      name: g.name,
+      description: g.description,
+      color: g.color,
+      sortOrder: g.sortOrder,
+    })),
+    entries: [],
+    vault,
+    needsPassword: false,
+    kdfSalt: json.kdfSalt ? String(json.kdfSalt) : undefined,
+    encrypted: true,
+  }
+}
+
+function parseVaultDoc(json: Record<string, unknown>): DetectedImport {
+  const vault = parseVault(json)
+  return {
+    format: '凭据库 JSON',
+    groups: vault.groups.map((g) => ({
+      name: g.name,
+      description: g.description,
+      color: g.color,
+      sortOrder: g.sortOrder,
+    })),
+    entries: [],
+    vault,
+    needsPassword: false,
+    kdfSalt: json.kdfSalt ? String(json.kdfSalt) : undefined,
+    encrypted: Boolean(json.kdfSalt || json.exportedAt),
+  }
 }
 
 async function decryptImportedEntry(

@@ -12,72 +12,17 @@ public class User
 
     public string PasswordHash { get; set; } = string.Empty;
 
-    /// <summary>Client-side KDF salt (Base64, 32 bytes).</summary>
     [MaxLength(88)]
     public string KdfSalt { get; set; } = string.Empty;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    /// <summary>Entire credential vault as JSON (irregular items + multi-account).</summary>
+    public string VaultJson { get; set; } = """{"version":"4.0","groups":[],"items":[]}""";
 
-    public List<GroupEntity> Groups { get; set; } = [];
-    public List<EntryEntity> Entries { get; set; } = [];
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime VaultUpdatedAt { get; set; } = DateTime.UtcNow;
+
     public UserSettings? Settings { get; set; }
     public List<RefreshToken> RefreshTokens { get; set; } = [];
-}
-
-public class GroupEntity
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid UserId { get; set; }
-
-    [MaxLength(128)]
-    public string Name { get; set; } = string.Empty;
-
-    [MaxLength(512)]
-    public string Description { get; set; } = string.Empty;
-
-    [MaxLength(16)]
-    public string Color { get; set; } = "#4A90E2";
-
-    public int SortOrder { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-    public User User { get; set; } = null!;
-    public List<EntryEntity> Entries { get; set; } = [];
-}
-
-public class EntryEntity
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid UserId { get; set; }
-    public Guid? GroupId { get; set; }
-
-    [MaxLength(256)]
-    public string Title { get; set; } = string.Empty;
-
-    [MaxLength(256)]
-    public string Username { get; set; } = string.Empty;
-
-    /// <summary>AES-GCM ciphertext of the password (client-encrypted).</summary>
-    public string Password { get; set; } = string.Empty;
-
-    [MaxLength(2048)]
-    public string Url { get; set; } = string.Empty;
-
-    /// <summary>AES-GCM ciphertext of notes (client-encrypted).</summary>
-    public string Notes { get; set; } = string.Empty;
-
-    [MaxLength(64)]
-    public string Category { get; set; } = string.Empty;
-
-    /// <summary>JSON array of custom fields; hidden values are client-encrypted.</summary>
-    public string CustomFieldsJson { get; set; } = "[]";
-
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-    public User User { get; set; } = null!;
-    public GroupEntity? Group { get; set; }
 }
 
 public class UserSettings

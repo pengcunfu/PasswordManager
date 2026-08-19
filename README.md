@@ -29,7 +29,7 @@ PasswordManager.Net/
 dotnet run --project src/PasswordManager.Api
 ```
 
-终端 2 — 启动前端（http://localhost:5173，`/api` 会代理到 5080）：
+终端 2 — 启动前端（http://localhost:8890，`/api` 会代理到 5080）：
 
 ```bash
 cd src/PasswordManager.Web
@@ -37,7 +37,13 @@ npm install
 npm run dev
 ```
 
-浏览器打开 `http://localhost:5173`，注册账号后即可使用。主密码用于登录，并在本地派生加密密钥。
+浏览器打开 `http://localhost:8890`，注册账号后即可使用。主密码用于登录，并在本地派生加密密钥。
+
+### 局域网访问
+
+Web 与 API 会监听所有网卡。同一 Wi-Fi 下的手机或其他电脑，用开发机的局域网地址访问，例如 `http://192.168.1.10:8890`（启动脚本会打印具体地址）。
+
+若浏览器打不开，多半是 Windows 防火墙拦截：右键以管理员运行 `scripts\allow-lan.cmd`，放行 8890 和 5080。
 
 ### 桌面端
 
@@ -47,7 +53,7 @@ dotnet run --project src/PasswordManager.Desktop
 
 首次启动填写服务器地址：
 
-- 本地前后端分离开发：`http://localhost:5173`
+- 本地前后端分离开发：`http://localhost:8890`
 - Docker / 生产（API 托管 SPA）：`http://主机:8080`
 
 地址保存在 `%USERPROFILE%\Documents\FNSoftware\PasswordManager\desktop.json`。
@@ -67,10 +73,10 @@ docker compose up -d --build
 
 ## 功能
 
-- 多用户注册 / JWT 登录
-- 密码条目与分组 CRUD、搜索
+- 多用户注册 / JWT 登录，同一浏览器会话可登录多个账号并切换
+- 凭据以 JSON 文档保存：同一网址可挂多个账号（登录 / 凭据 / 密钥 / 备忘）
 - 客户端字段级加密（PBKDF2 + AES-GCM）
-- 密码生成器、备份导出、关于
+- 密码生成器、备份导出、导入合并
 - AI 助手（OpenAI 兼容接口，设置保存在服务端，工具在浏览器执行）
 - 响应式布局：PC 三栏+AI，手机列表/详情/底栏
 

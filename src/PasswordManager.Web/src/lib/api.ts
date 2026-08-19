@@ -1,5 +1,5 @@
-import type { AboutInfo, AuthResponse, Entry, Group, Settings } from '../types'
-import { updateStoredToken } from './sessionStore'
+import type { AboutInfo, AuthResponse, Settings, VaultDoc } from '../types'
+import { getActiveUserId, updateStoredToken } from './sessionStore'
 
 let accessToken = ''
 
@@ -21,7 +21,12 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
 
-  const res = await fetch(path, { ...init, headers, credentials: 'include' })
+  let res: Response
+  try {
+    res = await fetch(path, { ...init, headers, credentials: 'include' })
+  } catch {
+    throw new ApiError(0, '无法连接后端，请先运行 scripts\\run-api.cmd')
+  }
 
   if (res.status === 401 && retry && !path.startsWith('/api/auth/')) {
     const ok = await tryRefresh()
@@ -31,16 +36,34 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   if (res.status === 204) return undefined as T
 
   const text = await res.text()
-  const data = text ? JSON.parse(text) : null
-  if (!res.ok) {
-    throw new ApiError(res.status, data?.error || res.statusText || '请求失败')
+  let data: { error?: string } | null = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
   }
+  if (!res.ok) {
+    const offline = res.status === 502 || res.status === 503 || res.status === 504
+    throw new ApiError(
+      res.status,
+      offline
+        ? '后端 API 未启动，请先运行 scripts\\run-api.cmd'
+        : (data?.error || res.statusText || '请求失败'),
+    )
+  }
+  if (!text) return undefined as T
+  if (!data) throw new ApiError(res.status, '服务器返回了无法解析的响应')
   return data as T
 }
 
 async function tryRefresh(): Promise<boolean> {
   try {
-    const data = await request<AuthResponse>('/api/auth/refresh', { method: 'POST' }, false)
+    const data = await request<AuthResponse>('/api/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ userId: getActiveUserId() }),
+    }, false)
     setAccessToken(data.accessToken)
     return true
   } catch {
@@ -61,55 +84,34 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
 
-  logout: () => request<void>('/api/auth/logout', { method: 'POST' }, false),
+  logout: (userId?: string | null, all = false) =>
+    request<void>('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ userId: userId || undefined, all }),
+    }, false),
 
-  refresh: () =>
-    request<AuthResponse>('/api/auth/refresh', { method: 'POST' }, false),
+  refresh: (userId?: string | null) =>
+    request<AuthResponse>('/api/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ userId: userId || undefined }),
+    }, false),
 
   me: () => request<{ userId: string; username: string }>('/api/auth/me'),
 
-  listEntries: (keyword?: string, groupId?: string | null) => {
-    const q = new URLSearchParams()
-    if (keyword) q.set('keyword', keyword)
-    if (groupId) q.set('groupId', groupId)
-    const qs = q.toString()
-    return request<Entry[]>(`/api/entries${qs ? `?${qs}` : ''}`)
-  },
+  getVault: () => request<{ document: VaultDoc; updatedAt: string }>('/api/vault'),
 
-  getEntry: (id: string) => request<Entry>(`/api/entries/${id}`),
+  saveVault: (document: VaultDoc) =>
+    request<{ document: VaultDoc; updatedAt: string }>('/api/vault', {
+      method: 'PUT',
+      body: JSON.stringify({ document }),
+    }),
 
-  createEntry: (body: unknown) =>
-    request<Entry>('/api/entries', { method: 'POST', body: JSON.stringify(body) }),
-
-  updateEntry: (id: string, body: unknown) =>
-    request<Entry>(`/api/entries/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-
-  deleteEntry: (id: string) =>
-    request<void>(`/api/entries/${id}`, { method: 'DELETE' }),
-
-  listGroups: () => request<Group[]>('/api/groups'),
-
-  createGroup: (body: unknown) =>
-    request<Group>('/api/groups', { method: 'POST', body: JSON.stringify(body) }),
-
-  updateGroup: (id: string, body: unknown) =>
-    request<Group>(`/api/groups/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-
-  deleteGroup: (id: string) =>
-    request<void>(`/api/groups/${id}`, { method: 'DELETE' }),
+  backup: () => request<unknown>('/api/vault/backup'),
 
   getSettings: () => request<Settings>('/api/settings'),
 
   saveSettings: (body: unknown) =>
     request<Settings>('/api/settings', { method: 'PUT', body: JSON.stringify(body) }),
-
-  backup: () => request<unknown>('/api/vault/backup'),
-
-  importVault: (body: unknown) =>
-    request<{ groupsCreated: number; entriesImported: number; entriesSkipped: number }>(
-      '/api/vault/import',
-      { method: 'POST', body: JSON.stringify(body) },
-    ),
 
   about: () => request<AboutInfo>('/api/vault/about'),
 

@@ -5,8 +5,6 @@ namespace PasswordManager.Api.Data;
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
-    public DbSet<GroupEntity> Groups => Set<GroupEntity>();
-    public DbSet<EntryEntity> Entries => Set<EntryEntity>();
     public DbSet<UserSettings> Settings => Set<UserSettings>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
@@ -16,29 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => x.Username).IsUnique();
             e.Property(x => x.Username).IsRequired();
-        });
-
-        modelBuilder.Entity<GroupEntity>(e =>
-        {
-            e.HasOne(x => x.User)
-                .WithMany(x => x.Groups)
-                .HasForeignKey(x => x.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(x => x.UserId);
-        });
-
-        modelBuilder.Entity<EntryEntity>(e =>
-        {
-            e.HasOne(x => x.User)
-                .WithMany(x => x.Entries)
-                .HasForeignKey(x => x.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Group)
-                .WithMany(x => x.Entries)
-                .HasForeignKey(x => x.GroupId)
-                .OnDelete(DeleteBehavior.SetNull);
-            e.HasIndex(x => x.UserId);
-            e.HasIndex(x => new { x.UserId, x.Title });
+            e.Property(x => x.VaultJson).HasColumnType("TEXT");
         });
 
         modelBuilder.Entity<UserSettings>(e =>

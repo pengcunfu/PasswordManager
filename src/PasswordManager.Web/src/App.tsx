@@ -11,7 +11,7 @@ export default function App() {
 }
 
 function Gate() {
-  const { session, ready } = useSession()
+  const { session, ready, addingAccount } = useSession()
   if (!ready) {
     return (
       <div className="login-page">
@@ -23,5 +23,6 @@ function Gate() {
       </div>
     )
   }
-  return session ? <VaultPage /> : <LoginPage />
+  if (addingAccount || !session) return <LoginPage />
+  return <VaultPage key={session.userId} />
 }

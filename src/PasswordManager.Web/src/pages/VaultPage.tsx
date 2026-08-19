@@ -2,58 +2,74 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { api } from '../lib/api'
 import { runAiChat, type ChatMessage } from '../lib/ai'
 import { checkStrength, generatePassword } from '../lib/password'
-import { buildImportPayload, decryptDetected, detectImport, type DetectedImport } from '../lib/import'
-import { decryptEntry, encryptEntryPayload } from '../lib/vault'
+import {
+  decryptDetected,
+  decryptDetectedVault,
+  detectImport,
+  mergeEntries,
+  mergeVaultDocs,
+  type DetectedImport,
+} from '../lib/import'
+import {
+  cloneVault,
+  decryptVault,
+  emptyAccount,
+  emptyGroup,
+  emptyItem,
+  emptyVault,
+  encryptVault,
+  newId,
+  normalizeUrl,
+  nowIso,
+  parseVault,
+} from '../lib/vault'
+import { AccountMenu } from '../components/AccountMenu'
 import { useSession } from '../context/SessionContext'
-import type { AboutInfo, CustomField, Entry, Group, Settings } from '../types'
+import type { AboutInfo, Account, Group, ItemType, Settings, VaultDoc, VaultItem } from '../types'
+import { ITEM_TYPES } from '../types'
 
 type Toast = { msg: string; type: 'success' | 'error' }
 type MobilePane = 'list' | 'detail' | 'ai'
 
-const emptyForm = {
-  title: '',
-  username: '',
-  password: '',
-  url: '',
-  notes: '',
-  category: '',
-  groupId: null as string | null,
-  customFields: [] as CustomField[],
-}
-
 export function VaultPage() {
-  const { session, logout } = useSession()
+  const { session } = useSession()
   const key = session!.key
 
-  const [entries, setEntries] = useState<Entry[]>([])
-  const [groups, setGroups] = useState<Group[]>([])
+  const [vault, setVault] = useState<VaultDoc>(emptyVault())
   const [settings, setSettings] = useState<Settings | null>(null)
   const [keyword, setKeyword] = useState('')
   const [groupId, setGroupId] = useState<string | 'all'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [detail, setDetail] = useState<Entry | null>(null)
-  const [editing, setEditing] = useState<typeof emptyForm | null>(null)
+  const [editing, setEditing] = useState<VaultItem | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
   const [pane, setPane] = useState<MobilePane>('list')
   const [showGroups, setShowGroups] = useState(false)
   const [showGen, setShowGen] = useState(false)
-  const [genTarget, setGenTarget] = useState<'modal' | 'form'>('modal')
+  const [genAccountId, setGenAccountId] = useState<string | null>(null)
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const [groupEditor, setGroupEditor] = useState<Partial<Group> | null>(null)
   const [showImport, setShowImport] = useState(false)
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({})
+
+  const groups = vault.groups
+  const items = vault.items
+  const selected = items.find((i) => i.id === selectedId) ?? null
 
   const showToast = (msg: string, type: Toast['type'] = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 2500)
   }
 
+  const persist = useCallback(async (next: VaultDoc) => {
+    const encrypted = await encryptVault(key, next)
+    await api.saveVault(encrypted)
+    setVault(next)
+  }, [key])
+
   const reload = useCallback(async () => {
-    const [rawEntries, rawGroups] = await Promise.all([api.listEntries(), api.listGroups()])
-    const decrypted: Entry[] = []
-    for (const e of rawEntries) decrypted.push(await decryptEntry(key, e))
-    setEntries(decrypted)
-    setGroups(rawGroups)
+    const { document } = await api.getVault()
+    setVault(await decryptVault(key, parseVault(document)))
   }, [key])
 
   useEffect(() => {
@@ -63,84 +79,104 @@ export function VaultPage() {
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase()
-    return entries.filter((e) => {
-      if (groupId !== 'all' && (e.groupId || '') !== groupId) return false
+    return items.filter((item) => {
+      if (groupId === '' && item.groupId) return false
+      if (groupId !== 'all' && groupId !== '' && (item.groupId || '') !== groupId) return false
       if (!q) return true
-      return [e.title, e.username, e.url, e.category, e.notes].some((v) =>
-        (v || '').toLowerCase().includes(q),
-      )
+      const hay = [
+        item.title,
+        item.url,
+        item.category,
+        item.notes,
+        item.type,
+        ...item.accounts.flatMap((a) => [a.label, a.username, a.notes]),
+      ]
+      return hay.some((v) => (v || '').toLowerCase().includes(q))
     })
-  }, [entries, keyword, groupId])
+  }, [items, keyword, groupId])
 
-  async function openEntry(id: string) {
+  function openItem(id: string) {
     setSelectedId(id)
     setEditing(null)
-    const raw = await api.getEntry(id)
-    const dec = await decryptEntry(key, raw)
-    setDetail(dec)
+    setRevealed({})
     setPane('detail')
   }
 
   function startAdd() {
+    const draft = emptyItem()
+    draft.groupId = groupId === 'all' || groupId === '' ? null : groupId
     setSelectedId(null)
-    setDetail(null)
-    setEditing({
-      ...emptyForm,
-      groupId: groupId === 'all' ? null : groupId,
-    })
+    setEditing(draft)
     setPane('detail')
   }
 
   function startEdit() {
-    if (!detail) return
-    setEditing({
-      title: detail.title,
-      username: detail.username,
-      password: detail.password,
-      url: detail.url,
-      notes: detail.notes,
-      category: detail.category,
-      groupId: detail.groupId,
-      customFields: detail.customFields,
-    })
+    if (!selected) return
+    setEditing(cloneVault({ version: '4.0', groups: [], items: [selected] }).items[0]!)
   }
 
-  async function saveEntry() {
+  function addAccountToSelected() {
+    if (!selected) return
+    const draft = cloneVault({ version: '4.0', groups: [], items: [selected] }).items[0]!
+    draft.accounts.push(emptyAccount())
+    setEditing(draft)
+  }
+
+  async function saveItem() {
     if (!editing?.title.trim()) {
       showToast('请输入标题', 'error')
       return
     }
-    const payload = await encryptEntryPayload(key, {
+    if (editing.accounts.length === 0) {
+      showToast('至少保留一个账号', 'error')
+      return
+    }
+    const draft: VaultItem = {
       ...editing,
       title: editing.title.trim(),
-    })
+      accounts: editing.accounts.map((a) => ({ ...a, id: a.id || newId() })),
+      updatedAt: nowIso(),
+    }
+    const isNew = !items.some((i) => i.id === draft.id)
+    const next = cloneVault(vault)
+    const url = normalizeUrl(draft.url)
+    const match = url
+      ? next.items.find((i) => i.id !== draft.id && normalizeUrl(i.url) === url)
+      : undefined
+
+    let savedId = draft.id
+    let merged = false
+    if (match) {
+      match.accounts.push(...draft.accounts)
+      match.updatedAt = nowIso()
+      if (!isNew) next.items = next.items.filter((i) => i.id !== draft.id)
+      savedId = match.id
+      merged = true
+    } else if (isNew) {
+      next.items.push(draft)
+    } else {
+      next.items = next.items.map((i) => (i.id === draft.id ? draft : i))
+    }
+
     try {
-      if (selectedId) {
-        const saved = await decryptEntry(key, await api.updateEntry(selectedId, payload))
-        setDetail(saved)
-        showToast('更新成功')
-      } else {
-        const saved = await decryptEntry(key, await api.createEntry(payload))
-        setSelectedId(saved.id)
-        setDetail(saved)
-        showToast('添加成功')
-      }
+      await persist(next)
+      setSelectedId(savedId)
       setEditing(null)
-      await reload()
+      showToast(merged ? `已合并到「${match!.title}」，当前 ${match!.accounts.length} 个账号` : (isNew ? '添加成功' : '更新成功'))
     } catch (e) {
       showToast(e instanceof Error ? e.message : '保存失败', 'error')
     }
   }
 
-  async function removeEntry() {
-    if (!selectedId || !confirm('确定要删除这个密码条目吗？')) return
-    await api.deleteEntry(selectedId)
+  async function removeItem() {
+    if (!selectedId || !confirm('确定删除这个条目及其全部账号？')) return
+    const next = cloneVault(vault)
+    next.items = next.items.filter((i) => i.id !== selectedId)
+    await persist(next)
     setSelectedId(null)
-    setDetail(null)
     setEditing(null)
     setPane('list')
     showToast('已删除')
-    await reload()
   }
 
   async function copyText(text: string) {
@@ -154,7 +190,7 @@ export function VaultPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `password-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
+    a.download = `vault-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
     a.click()
     URL.revokeObjectURL(url)
     showToast('备份已下载')
@@ -162,17 +198,32 @@ export function VaultPage() {
 
   async function saveGroup() {
     if (!groupEditor?.name?.trim()) return
-    const body = {
-      name: groupEditor.name.trim(),
-      description: groupEditor.description || '',
-      color: groupEditor.color || '#4A90E2',
-      sortOrder: groupEditor.sortOrder || 0,
+    const next = cloneVault(vault)
+    if (groupEditor.id) {
+      next.groups = next.groups.map((g) =>
+        g.id === groupEditor.id
+          ? {
+              ...g,
+              name: groupEditor.name!.trim(),
+              description: groupEditor.description || '',
+              color: groupEditor.color || g.color,
+              updatedAt: nowIso(),
+            }
+          : g,
+      )
+    } else {
+      const g = emptyGroup(groupEditor.name.trim())
+      g.color = groupEditor.color || g.color
+      g.description = groupEditor.description || ''
+      g.sortOrder = next.groups.length
+      next.groups.push(g)
     }
-    if (groupEditor.id) await api.updateGroup(groupEditor.id, body)
-    else await api.createGroup(body)
+    await persist(next)
     setGroupEditor(null)
-    await reload()
   }
+
+  const typeLabel = (type: ItemType) => ITEM_TYPES.find((t) => t.id === type)?.label ?? type
+  const secretLabel = (type: ItemType) => ITEM_TYPES.find((t) => t.id === type)?.secretLabel ?? '密码'
 
   const groupsUi = (
     <>
@@ -204,136 +255,130 @@ export function VaultPage() {
         <button className="menu-btn icon-btn" onClick={() => setShowGroups(true)}>☰</button>
         <div className="toolbar-title"><span>凭据管理器</span></div>
         <div className="toolbar-right">
-          <button className="hide-sm" onClick={() => { setGenTarget('modal'); setShowGen(true) }}>密码生成器</button>
+          <button className="hide-sm" onClick={() => { setGenAccountId(null); setShowGen(true) }}>密码生成器</button>
           <button className="hide-sm" onClick={() => api.about().then(setAbout)}>关于</button>
           <button className="hide-sm" onClick={() => setShowImport(true)}>导入</button>
           <button className="hide-sm" onClick={() => doBackup().catch((e) => showToast(e.message, 'error'))}>备份</button>
-          <button onClick={() => logout()}>注销</button>
+          <AccountMenu />
         </div>
       </div>
 
-      <div className="columns" style={{ position: 'relative' }}>
+      <div className="columns" data-pane={pane} style={{ position: 'relative' }}>
         <div className="col col-groups desktop-only">{groupsUi}</div>
 
-        <div className="col col-list" style={{ display: pane === 'ai' ? undefined : undefined }}>
+        <div className="col col-list">
           <div className="search-box">
-            <input placeholder="搜索密码..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+            <input placeholder="搜索标题、网址、用户名..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
           </div>
           <div className="list-count">{filtered.length} 个条目</div>
           <div className="scroll">
-            {filtered.map((e) => (
-              <div key={e.id} className={`entry-item ${e.id === selectedId ? 'active' : ''}`} onClick={() => openEntry(e.id).catch((err) => showToast(err.message, 'error'))}>
-                <div className="entry-title">{e.title}</div>
-                <div className="entry-meta">{e.username}</div>
-                {e.category && <span className="entry-category">{e.category}</span>}
+            {filtered.map((item) => (
+              <div
+                key={item.id}
+                className={`entry-item ${item.id === selectedId ? 'active' : ''}`}
+                onClick={() => openItem(item.id)}
+              >
+                <div className="entry-title">{item.title}</div>
+                <div className="entry-meta">
+                  {item.accounts.length > 1
+                    ? `${item.accounts.length} 个账号`
+                    : (item.accounts[0]?.username || item.accounts[0]?.label || typeLabel(item.type))}
+                  {item.url ? ` · ${hostOf(item.url)}` : ''}
+                </div>
+                <span className="entry-category">{typeLabel(item.type)}</span>
+                {item.category && <span className="entry-category" style={{ marginLeft: 4 }}>{item.category}</span>}
               </div>
             ))}
           </div>
-          <button className="add-btn" onClick={startAdd}>+ 添加密码</button>
+          <button className="add-btn" onClick={startAdd}>+ 添加凭据</button>
         </div>
 
         <div className={`col col-detail ${pane === 'detail' ? 'mobile-show' : ''}`}>
           {editing ? (
-            <div className="edit-form">
-              <h2 style={{ fontSize: 17, marginBottom: 20 }}>{selectedId ? '编辑密码' : '添加密码'}</h2>
-              <Field label="标题 *"><input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></Field>
-              <Field label="用户名"><input value={editing.username} onChange={(e) => setEditing({ ...editing, username: e.target.value })} /></Field>
-              <Field label="密码">
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input style={{ flex: 1 }} value={editing.password} onChange={(e) => setEditing({ ...editing, password: e.target.value })} />
-                  <button className="btn-secondary" type="button" onClick={() => { setGenTarget('form'); setShowGen(true) }}>生成</button>
-                </div>
-              </Field>
-              <Field label="网址"><input value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} /></Field>
-              <Field label="分类"><input value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} placeholder="如：邮箱、社交、开发工具" /></Field>
-              <Field label="分组">
-                <select value={editing.groupId || ''} onChange={(e) => setEditing({ ...editing, groupId: e.target.value || null })}>
-                  <option value="">未分组</option>
-                  {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                </select>
-              </Field>
-              <Field label="备注"><textarea value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></Field>
-              <div className="form-row">
-                <label>自定义字段</label>
-                {editing.customFields.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                    <input placeholder="名称" value={f.key} onChange={(e) => {
-                      const next = [...editing.customFields]; next[i] = { ...f, key: e.target.value }; setEditing({ ...editing, customFields: next })
-                    }} />
-                    <input placeholder="值" value={f.value} onChange={(e) => {
-                      const next = [...editing.customFields]; next[i] = { ...f, value: e.target.value }; setEditing({ ...editing, customFields: next })
-                    }} />
-                    <label style={{ whiteSpace: 'nowrap' }}>
-                      <input type="checkbox" checked={f.isHidden} onChange={(e) => {
-                        const next = [...editing.customFields]; next[i] = { ...f, isHidden: e.target.checked }; setEditing({ ...editing, customFields: next })
-                      }} /> 隐藏
-                    </label>
-                    <button className="btn-secondary" type="button" onClick={() => setEditing({ ...editing, customFields: editing.customFields.filter((_, j) => j !== i) })}>删</button>
-                  </div>
-                ))}
-                <button className="btn-secondary" type="button" onClick={() => setEditing({ ...editing, customFields: [...editing.customFields, { key: '', value: '', isHidden: false }] })}>+ 字段</button>
-              </div>
-              <div className="form-actions">
-                <button className="btn-primary" onClick={saveEntry}>保存</button>
-                <button className="btn-secondary" onClick={() => { setEditing(null); if (!selectedId) setPane('list') }}>取消</button>
-              </div>
-            </div>
-          ) : detail ? (
+            <ItemEditor
+              item={editing}
+              groups={groups}
+              onChange={setEditing}
+              onSave={() => void saveItem()}
+              onCancel={() => { setEditing(null); if (!selectedId) setPane('list') }}
+              onGenerate={(accountId) => { setGenAccountId(accountId); setShowGen(true) }}
+            />
+          ) : selected ? (
             <div className="detail-view">
               <div className="detail-header">
                 <button className="mobile-only icon-btn" onClick={() => setPane('list')}>←</button>
-                <span className="title">{detail.title}</span>
-                {detail.category && <span className="entry-category">{detail.category}</span>}
+                <span className="title">{selected.title}</span>
+                <span className="entry-category">{typeLabel(selected.type)}</span>
+                {selected.category && <span className="entry-category">{selected.category}</span>}
                 <div className="detail-actions">
+                  <button className="icon-btn" onClick={addAccountToSelected}>加账号</button>
                   <button className="icon-btn" onClick={startEdit}>编辑</button>
-                  <button className="icon-btn btn-danger" onClick={removeEntry}>删除</button>
+                  <button className="icon-btn btn-danger" onClick={() => void removeItem()}>删除</button>
                 </div>
               </div>
-              <FieldView label="用户名" value={detail.username} onCopy={copyText} />
-              <div className="field-group">
-                <div className="field-label">密码</div>
-                <div className="field-value pwd-field">
-                  <span>••••••••</span>
-                  <button className="copy-btn" onClick={() => copyText(detail.password)}>复制</button>
-                </div>
-              </div>
-              {detail.url && (
+              {selected.url && (
                 <div className="field-group">
                   <div className="field-label">网址</div>
-                  <div className="field-value"><a href={detail.url} target="_blank" rel="noreferrer">{detail.url}</a></div>
+                  <div className="field-value"><a href={selected.url} target="_blank" rel="noreferrer">{selected.url}</a></div>
                 </div>
               )}
-              {detail.notes && <FieldView label="备注" value={detail.notes} />}
-              {detail.customFields.map((f, i) => (
-                <FieldView key={i} label={f.key} value={f.isHidden ? '••••••••' : f.value} onCopy={f.isHidden ? () => copyText(f.value) : undefined} />
+              {selected.notes && <FieldView label="条目备注" value={selected.notes} />}
+              {selected.accounts.map((acc, idx) => (
+                <div key={acc.id} className="account-card">
+                  <div className="account-card-title">
+                    {acc.label || `账号 ${idx + 1}`}
+                    {selected.accounts.length > 1 && <span className="entry-meta"> · {idx + 1}/{selected.accounts.length}</span>}
+                  </div>
+                  <FieldView label="用户名" value={acc.username} onCopy={copyText} />
+                  <div className="field-group">
+                    <div className="field-label">{secretLabel(selected.type)}</div>
+                    <div className="field-value pwd-field">
+                      <span>{revealed[acc.id] ? acc.secret : '••••••••'}</span>
+                      <button className="copy-btn" onClick={() => setRevealed((r) => ({ ...r, [acc.id]: !r[acc.id] }))}>
+                        {revealed[acc.id] ? '隐藏' : '显示'}
+                      </button>
+                      <button className="copy-btn" onClick={() => void copyText(acc.secret)}>复制</button>
+                    </div>
+                  </div>
+                  {acc.notes && <FieldView label="备注" value={acc.notes} />}
+                  {acc.fields.map((f, i) => (
+                    <FieldView
+                      key={i}
+                      label={f.key}
+                      value={f.isHidden ? '••••••••' : f.value}
+                      onCopy={f.isHidden ? () => copyText(f.value) : undefined}
+                    />
+                  ))}
+                </div>
               ))}
               <div style={{ marginTop: 20, fontSize: 11, color: '#bbb' }}>
-                创建：{formatTime(detail.createdAt)}　|　更新：{formatTime(detail.updatedAt)}
+                创建：{formatTime(selected.createdAt)}　|　更新：{formatTime(selected.updatedAt)}
               </div>
             </div>
           ) : (
             <div className="detail-empty">
-              <div>选择一个密码条目查看详情</div>
+              <div>选择一个条目查看详情</div>
+              <div style={{ fontSize: 12 }}>同一网址可保存多个账号，例如多个 GitHub / QQ</div>
             </div>
           )}
         </div>
 
         <AiPanel
           className={pane === 'ai' ? 'mobile-show' : ''}
-          entries={entries}
+          vault={vault}
+          persist={persist}
           settings={settings}
-          vaultKey={key}
           onOpenSettings={() => setAiSettingsOpen(true)}
-          onEntriesChanged={reload}
+          onVaultChanged={reload}
           onError={(m) => showToast(m, 'error')}
           onCopy={(t) => { void copyText(t) }}
         />
       </div>
 
       <div className="bottom-nav">
-        <button className={pane !== 'ai' ? 'active' : ''} onClick={() => setPane('list')}>密码</button>
+        <button className={pane !== 'ai' ? 'active' : ''} onClick={() => setPane('list')}>凭据</button>
         <button className={pane === 'ai' ? 'active' : ''} onClick={() => setPane('ai')}>AI</button>
-        <button onClick={() => { setGenTarget('modal'); setShowGen(true) }}>生成器</button>
+        <button onClick={() => { setGenAccountId(null); setShowGen(true) }}>生成器</button>
         <button onClick={() => setShowImport(true)}>导入</button>
         <button onClick={() => doBackup().catch((e) => showToast(e.message, 'error'))}>备份</button>
       </div>
@@ -349,8 +394,14 @@ export function VaultPage() {
         <PasswordGenModal
           onClose={() => setShowGen(false)}
           onUse={(pwd) => {
-            if (genTarget === 'form' && editing) setEditing({ ...editing, password: pwd })
-            else copyText(pwd)
+            if (genAccountId && editing) {
+              setEditing({
+                ...editing,
+                accounts: editing.accounts.map((a) => a.id === genAccountId ? { ...a, secret: pwd } : a),
+              })
+            } else {
+              void copyText(pwd)
+            }
             setShowGen(false)
           }}
         />
@@ -359,11 +410,12 @@ export function VaultPage() {
       {showImport && (
         <ImportModal
           vaultKey={key}
+          vault={vault}
           onClose={() => setShowImport(false)}
-          onDone={async (msg) => {
+          onDone={async (next, msg) => {
+            await persist(next)
             setShowImport(false)
             showToast(msg)
-            await reload()
           }}
         />
       )}
@@ -396,14 +448,16 @@ export function VaultPage() {
             <Field label="描述"><input value={groupEditor.description || ''} onChange={(e) => setGroupEditor({ ...groupEditor, description: e.target.value })} /></Field>
             <Field label="颜色"><input type="color" value={groupEditor.color || '#18A058'} onChange={(e) => setGroupEditor({ ...groupEditor, color: e.target.value })} /></Field>
             <div className="form-actions">
-              <button className="btn-primary" onClick={() => saveGroup()}>保存</button>
+              <button className="btn-primary" onClick={() => void saveGroup()}>保存</button>
               {groupEditor.id && (
                 <button className="btn-secondary btn-danger" onClick={async () => {
                   if (!confirm('删除该分组？条目将变为未分组。')) return
-                  await api.deleteGroup(groupEditor.id!)
+                  const next = cloneVault(vault)
+                  next.groups = next.groups.filter((g) => g.id !== groupEditor.id)
+                  next.items = next.items.map((i) => i.groupId === groupEditor.id ? { ...i, groupId: null } : i)
+                  await persist(next)
                   if (groupId === groupEditor.id) setGroupId('all')
                   setGroupEditor(null)
-                  await reload()
                 }}>删除</button>
               )}
               <button className="btn-secondary" onClick={() => setGroupEditor(null)}>取消</button>
@@ -413,6 +467,105 @@ export function VaultPage() {
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+    </div>
+  )
+}
+
+function ItemEditor({
+  item,
+  groups,
+  onChange,
+  onSave,
+  onCancel,
+  onGenerate,
+}: {
+  item: VaultItem
+  groups: Group[]
+  onChange: (item: VaultItem) => void
+  onSave: () => void
+  onCancel: () => void
+  onGenerate: (accountId: string) => void
+}) {
+  const secretName = ITEM_TYPES.find((t) => t.id === item.type)?.secretLabel ?? '密码'
+  function patchAccount(id: string, patch: Partial<Account>) {
+    onChange({ ...item, accounts: item.accounts.map((a) => a.id === id ? { ...a, ...patch } : a) })
+  }
+
+  return (
+    <div className="edit-form">
+      <div className="detail-header">
+        <button className="mobile-only icon-btn" type="button" onClick={onCancel}>←</button>
+        <span className="title">{item.title ? '编辑凭据' : '添加凭据'}</span>
+      </div>
+      <Field label="类型">
+        <select value={item.type} onChange={(e) => onChange({ ...item, type: e.target.value as ItemType })}>
+          {ITEM_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </Field>
+      <Field label="标题 *"><input value={item.title} onChange={(e) => onChange({ ...item, title: e.target.value })} placeholder="如 GitHub、QQ、某 API Key" /></Field>
+      <Field label="网址"><input value={item.url} onChange={(e) => onChange({ ...item, url: e.target.value })} placeholder="相同网址会自动合并为多账号" /></Field>
+      <Field label="分类"><input value={item.category} onChange={(e) => onChange({ ...item, category: e.target.value })} placeholder="如：邮箱、社交、开发工具" /></Field>
+      <Field label="分组">
+        <select value={item.groupId || ''} onChange={(e) => onChange({ ...item, groupId: e.target.value || null })}>
+          <option value="">未分组</option>
+          {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+      </Field>
+      <Field label="条目备注"><textarea value={item.notes} onChange={(e) => onChange({ ...item, notes: e.target.value })} /></Field>
+
+      {item.accounts.map((acc, idx) => (
+        <div key={acc.id} className="account-card">
+          <div className="account-card-title">
+            账号 {idx + 1}
+            {item.accounts.length > 1 && (
+              <button
+                className="icon-btn btn-danger"
+                type="button"
+                onClick={() => onChange({ ...item, accounts: item.accounts.filter((a) => a.id !== acc.id) })}
+              >
+                删除
+              </button>
+            )}
+          </div>
+          <Field label="账号别名"><input value={acc.label} onChange={(e) => patchAccount(acc.id, { label: e.target.value })} placeholder="工作号 / 个人号 / 默认" /></Field>
+          <Field label="用户名"><input value={acc.username} onChange={(e) => patchAccount(acc.id, { username: e.target.value })} /></Field>
+          <Field label={secretName}>
+            <div className="secret-row">
+              <input value={acc.secret} onChange={(e) => patchAccount(acc.id, { secret: e.target.value })} />
+              <button className="btn-secondary" type="button" onClick={() => onGenerate(acc.id)}>生成</button>
+            </div>
+          </Field>
+          <Field label="备注"><textarea value={acc.notes} onChange={(e) => patchAccount(acc.id, { notes: e.target.value })} /></Field>
+          <div className="form-row">
+            <label>自定义字段（不规则信息可放这里）</label>
+            {acc.fields.map((f, i) => (
+              <div key={i} className="custom-field-row">
+                <input placeholder="名称" value={f.key} onChange={(e) => {
+                  const fields = [...acc.fields]; fields[i] = { ...f, key: e.target.value }; patchAccount(acc.id, { fields })
+                }} />
+                <input placeholder="值" value={f.value} onChange={(e) => {
+                  const fields = [...acc.fields]; fields[i] = { ...f, value: e.target.value }; patchAccount(acc.id, { fields })
+                }} />
+                <label className="custom-field-hide">
+                  <input type="checkbox" checked={f.isHidden} onChange={(e) => {
+                    const fields = [...acc.fields]; fields[i] = { ...f, isHidden: e.target.checked }; patchAccount(acc.id, { fields })
+                  }} /> 隐藏
+                </label>
+                <button className="btn-secondary" type="button" onClick={() => patchAccount(acc.id, { fields: acc.fields.filter((_, j) => j !== i) })}>删</button>
+              </div>
+            ))}
+            <button className="btn-secondary" type="button" onClick={() => patchAccount(acc.id, { fields: [...acc.fields, { key: '', value: '', isHidden: false }] })}>+ 字段</button>
+          </div>
+        </div>
+      ))}
+
+      <button className="btn-secondary add-account-btn" type="button" onClick={() => onChange({ ...item, accounts: [...item.accounts, emptyAccount()] })}>
+        + 添加账号（同一网址）
+      </button>
+      <div className="form-actions">
+        <button className="btn-primary" onClick={onSave}>保存</button>
+        <button className="btn-secondary" onClick={onCancel}>取消</button>
+      </div>
     </div>
   )
 }
@@ -444,6 +597,14 @@ function formatTime(iso: string) {
     return new Date(iso).toLocaleString()
   } catch {
     return iso
+  }
+}
+
+function hostOf(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url.replace(/^https?:\/\//, '').split('/')[0] || url
   }
 }
 
@@ -534,20 +695,20 @@ function AiSettingsModal({
 
 function AiPanel({
   className,
-  entries,
+  vault,
+  persist,
   settings,
-  vaultKey,
   onOpenSettings,
-  onEntriesChanged,
+  onVaultChanged,
   onError,
   onCopy,
 }: {
   className?: string
-  entries: Entry[]
+  vault: VaultDoc
+  persist: (next: VaultDoc) => Promise<void>
   settings: Settings | null
-  vaultKey: CryptoKey
   onOpenSettings: () => void
-  onEntriesChanged: () => Promise<void>
+  onVaultChanged: () => Promise<void>
   onError: (msg: string) => void
   onCopy: (text: string) => void
 }) {
@@ -571,8 +732,8 @@ function AiPanel({
       const reply = await runAiChat({
         userMessage: msg,
         history,
-        entries,
-        key: vaultKey,
+        vault,
+        persist,
         settings,
         onChunk: (chunk) => {
           setBubbles((b) => {
@@ -590,7 +751,7 @@ function AiPanel({
             return next
           })
         },
-        onEntriesChanged,
+        onVaultChanged,
       })
       setHistory((h) => [...h, { role: 'user', content: msg }, { role: 'assistant', content: reply }])
       setBubbles((b) => {
@@ -626,10 +787,10 @@ function AiPanel({
         {bubbles.length === 0 && (
           <div className="chat-welcome">
             <div>你好！我是凭据管理器 AI 助手</div>
-            <div>用自然语言管理你的密码</div>
+            <div>同一网站下可以有多个账号</div>
             <div style={{ marginTop: 8, textAlign: 'left', display: 'inline-block', fontSize: 12, color: '#ccc' }}>
-              • 帮我查看 GitHub 的密码<br />
-              • 添加一个新的 Gmail 密码<br />
+              • 帮我查看 GitHub 的全部账号<br />
+              • 给 QQ 再加一个小号<br />
               • 生成一个16位的随机密码
             </div>
           </div>
@@ -654,7 +815,7 @@ function AiPanel({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') send() }}
         />
-        <button disabled={busy} onClick={send}>发送</button>
+        <button disabled={busy} onClick={() => void send()}>发送</button>
       </div>
     </div>
   )
@@ -662,12 +823,14 @@ function AiPanel({
 
 function ImportModal({
   vaultKey,
+  vault,
   onClose,
   onDone,
 }: {
   vaultKey: CryptoKey
+  vault: VaultDoc
   onClose: () => void
-  onDone: (msg: string) => Promise<void>
+  onDone: (next: VaultDoc, msg: string) => Promise<void>
 }) {
   const [detected, setDetected] = useState<DetectedImport | null>(null)
   const [fileName, setFileName] = useState('')
@@ -696,10 +859,15 @@ function ImportModal({
     setBusy(true)
     setError('')
     try {
-      const plain = await decryptDetected(detected, vaultKey, legacyPassword)
-      const payload = await buildImportPayload(detected.groups, plain, vaultKey, skipDuplicates)
-      const result = await api.importVault(payload)
-      await onDone(`导入完成：新增 ${result.entriesImported} 条，跳过 ${result.entriesSkipped} 条，分组 ${result.groupsCreated} 个`)
+      let result: { vault: VaultDoc; imported: number; skipped: number }
+      if (detected.vault) {
+        const incoming = await decryptDetectedVault(detected, vaultKey, legacyPassword)
+        result = mergeVaultDocs(vault, incoming, skipDuplicates)
+      } else {
+        const plain = await decryptDetected(detected, vaultKey, legacyPassword)
+        result = mergeEntries(vault, detected.groups, plain, skipDuplicates)
+      }
+      await onDone(result.vault, `导入完成：新增 ${result.imported} 个账号，跳过 ${result.skipped} 个`)
     } catch (e) {
       setError(e instanceof Error ? e.message : '导入失败')
     } finally {
@@ -707,12 +875,16 @@ function ImportModal({
     }
   }
 
+  const count = detected?.vault
+    ? detected.vault.items.reduce((n, i) => n + i.accounts.length, 0)
+    : detected?.entries.length ?? 0
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <h2>导入密码</h2>
+        <h2>导入凭据</h2>
         <p style={{ color: '#888', marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}>
-          支持本应用备份 JSON、旧版本地密码库、Bitwarden 未加密 JSON，以及 Chrome / Firefox / 通用 CSV。
+          支持本应用备份 JSON、旧版本地密码库、Bitwarden 未加密 JSON，以及 Chrome / Firefox / 通用 CSV。相同网址会合并为多账号。
         </p>
         <div className="form-row">
           <label>选择文件</label>
@@ -727,7 +899,7 @@ function ImportModal({
         </div>
         {fileName && detected && (
           <p style={{ marginBottom: 12 }}>
-            已识别：<strong>{detected.format}</strong>，{detected.entries.length} 条密码
+            已识别：<strong>{detected.format}</strong>，{count} 条
             {detected.groups.length ? `，${detected.groups.length} 个分组` : ''}
           </p>
         )}
@@ -744,7 +916,7 @@ function ImportModal({
         )}
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
           <input type="checkbox" checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} />
-          跳过标题和用户名相同的重复条目
+          同一网址下用户名相同则跳过
         </label>
         {error && <div className="error" style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</div>}
         <div className="form-actions">

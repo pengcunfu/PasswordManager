@@ -19,47 +19,11 @@ public record AuthResponse(
     string KdfSalt,
     Guid UserId);
 
+public record RefreshRequest(Guid? UserId);
+
+public record LogoutRequest(Guid? UserId, bool All = false);
+
 public record PreloginResponse(string KdfSalt);
-
-public record CustomFieldDto(string Key, string Value, bool IsHidden);
-
-public record EntryDto(
-    Guid Id,
-    string Title,
-    string Username,
-    string Password,
-    string Url,
-    string Notes,
-    string Category,
-    Guid? GroupId,
-    List<CustomFieldDto> CustomFields,
-    DateTime CreatedAt,
-    DateTime UpdatedAt);
-
-public record UpsertEntryRequest(
-    [Required, MaxLength(256)] string Title,
-    string? Username,
-    string? Password,
-    string? Url,
-    string? Notes,
-    string? Category,
-    Guid? GroupId,
-    List<CustomFieldDto>? CustomFields);
-
-public record GroupDto(
-    Guid Id,
-    string Name,
-    string Description,
-    string Color,
-    int SortOrder,
-    DateTime CreatedAt,
-    DateTime UpdatedAt);
-
-public record UpsertGroupRequest(
-    [Required, MaxLength(128)] string Name,
-    string? Description,
-    string? Color,
-    int SortOrder);
 
 public record SettingsDto(
     string Theme,
@@ -81,36 +45,18 @@ public record UpdateSettingsRequest(
     int? AiMaxTokens,
     double? AiTemperature);
 
+public record VaultDocumentDto(
+    System.Text.Json.JsonElement Document,
+    DateTime UpdatedAt);
+
+public record SaveVaultRequest(System.Text.Json.JsonElement Document);
+
 public record VaultBackupDto(
     string Version,
     DateTime ExportedAt,
     string Username,
     string KdfSalt,
-    List<GroupDto> Groups,
-    List<EntryDto> Entries);
-
-public record ImportVaultRequest(
-    bool SkipDuplicates,
-    List<ImportGroupItem>? Groups,
-    List<ImportEntryItem>? Entries);
-
-public record ImportGroupItem(
-    [Required, MaxLength(128)] string Name,
-    string? Description,
-    string? Color,
-    int SortOrder);
-
-public record ImportEntryItem(
-    [Required, MaxLength(256)] string Title,
-    string? Username,
-    string? Password,
-    string? Url,
-    string? Notes,
-    string? Category,
-    string? GroupName,
-    List<CustomFieldDto>? CustomFields);
-
-public record ImportResultDto(int GroupsCreated, int EntriesImported, int EntriesSkipped);
+    System.Text.Json.JsonElement Document);
 
 public record AiTestRequest(string? ApiEndpoint, string? ApiKey, string? Model);
 

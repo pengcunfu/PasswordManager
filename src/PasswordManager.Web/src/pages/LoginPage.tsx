@@ -2,13 +2,23 @@ import { useState, type FormEvent } from 'react'
 import { useSession } from '../context/SessionContext'
 
 export function LoginPage() {
-  const { login, register } = useSession()
+  const {
+    login,
+    register,
+    accounts,
+    addingAccount,
+    cancelAddAccount,
+    switchAccount,
+    session,
+  } = useSession()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState(localStorage.getItem('pm.username') || '')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  const others = accounts.filter((a) => a.userId !== session?.userId)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -45,8 +55,27 @@ export function LoginPage() {
         <div className="icon">🔒</div>
         <h1>凭据管理器</h1>
         <div className="subtitle">
-          {mode === 'login' ? '输入主密码以解锁您的密码库' : '创建账号，主密码用于派生加密密钥'}
+          {addingAccount
+            ? '登录或注册另一个账号，当前已解锁的账号仍会保留'
+            : mode === 'login'
+              ? '输入主密码以解锁您的密码库'
+              : '创建账号，主密码用于派生加密密钥'}
         </div>
+        {others.length > 0 && mode === 'login' && (
+          <div className="login-accounts">
+            <div className="login-accounts-label">已解锁账号</div>
+            {others.map((a) => (
+              <button
+                key={a.userId}
+                type="button"
+                className="login-account-btn"
+                onClick={() => void switchAccount(a.userId).catch((e) => setError(e instanceof Error ? e.message : '切换失败'))}
+              >
+                切换到 {a.username}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="error">{error}</div>
         <input
           autoComplete="username"
@@ -71,8 +100,13 @@ export function LoginPage() {
           />
         )}
         <button className="primary" disabled={busy}>
-          {busy ? '处理中...' : mode === 'login' ? '解 锁' : '注 册'}
+          {busy ? '处理中...' : mode === 'login' ? (addingAccount ? '添加并切换' : '解 锁') : '注 册'}
         </button>
+        {addingAccount && (
+          <button type="button" className="login-cancel" onClick={cancelAddAccount}>
+            返回 {session?.username}
+          </button>
+        )}
         <div className="switch">
           {mode === 'login' ? (
             <>

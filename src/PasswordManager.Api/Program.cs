@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -71,7 +73,7 @@ builder.Services.AddCors(options =>
     {
         var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
             ?? ["http://localhost:5173"];
-        policy.WithOrigins(origins)
+        policy.SetIsOriginAllowed(origin => IsAllowedSpaOrigin(origin, origins))
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -84,6 +86,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+    VaultMigrator.EnsureAsync(db).GetAwaiter().GetResult();
 }
 
 if (app.Environment.IsDevelopment())
@@ -110,6 +113,35 @@ if (hasSpa)
 }
 
 app.Run();
+
+static bool IsAllowedSpaOrigin(string origin, string[] configured)
+{
+    if (configured.Contains(origin, StringComparer.OrdinalIgnoreCase))
+        return true;
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+        return false;
+    if (uri.Scheme is not ("http" or "https"))
+        return false;
+
+    var host = uri.Host;
+    if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host is "127.0.0.1" or "::1")
+        return true;
+    if (host.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+        return true;
+    return IPAddress.TryParse(host, out var ip) && IsPrivateOrLinkLocal(ip);
+}
+
+static bool IsPrivateOrLinkLocal(IPAddress ip)
+{
+    if (IPAddress.IsLoopback(ip)) return true;
+    if (ip.IsIPv6LinkLocal || ip.IsIPv6UniqueLocal) return true;
+    if (ip.AddressFamily != AddressFamily.InterNetwork) return false;
+    var b = ip.GetAddressBytes();
+    return b[0] == 10
+        || (b[0] == 172 && b[1] is >= 16 and <= 31)
+        || (b[0] == 192 && b[1] == 168)
+        || (b[0] == 169 && b[1] == 254);
+}
 
 static void EnsureSqliteDirectory(string connectionString)
 {

@@ -4,16 +4,26 @@ export type CustomField = {
   isHidden: boolean
 }
 
-export type Entry = {
+export type ItemType = 'login' | 'credential' | 'key' | 'note'
+
+export type Account = {
   id: string
-  title: string
+  label: string
   username: string
-  password: string
-  url: string
+  secret: string
   notes: string
-  category: string
+  fields: CustomField[]
+}
+
+export type VaultItem = {
+  id: string
+  type: ItemType
+  title: string
+  url: string
   groupId: string | null
-  customFields: CustomField[]
+  category: string
+  notes: string
+  accounts: Account[]
   createdAt: string
   updatedAt: string
 }
@@ -26,6 +36,12 @@ export type Group = {
   sortOrder: number
   createdAt: string
   updatedAt: string
+}
+
+export type VaultDoc = {
+  version: string
+  groups: Group[]
+  items: VaultItem[]
 }
 
 export type Settings = {
@@ -53,3 +69,10 @@ export type AboutInfo = {
   description: string
   author: string
 }
+
+export const ITEM_TYPES: { id: ItemType; label: string; secretLabel: string }[] = [
+  { id: 'login', label: '登录账号', secretLabel: '密码' },
+  { id: 'credential', label: '凭据密码', secretLabel: '凭据 / 密码' },
+  { id: 'key', label: '密钥 / Key', secretLabel: '密钥内容' },
+  { id: 'note', label: '备忘', secretLabel: '内容' },
+]
