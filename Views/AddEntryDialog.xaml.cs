@@ -28,11 +28,14 @@ namespace PasswordManager.Views
             InitializeDialog();
         }
 
-        /// <summary>
-        /// 初始化对话框
-        /// </summary>
-        private void InitializeDialog()
-        {
+       /// <summary>
+       /// 初始化对话框
+       /// </summary>
+       private void InitializeDialog()
+       {
+            // 加载分组列表
+            LoadGroups();
+            
             if (_isEditMode)
             {
                 DialogTitle.Text = "编辑密码";
@@ -46,6 +49,9 @@ namespace PasswordManager.Views
                 CategoryTextBox.Text = _editingEntry.Category;
                 NotesTextBox.Text = _editingEntry.Notes;
 
+                // 设置当前分组
+                SetCurrentGroup(_editingEntry.GroupId);
+
                 UpdatePasswordStrength(_editingEntry.Password);
 
                 // 加载自定义字段
@@ -58,10 +64,48 @@ namespace PasswordManager.Views
             {
                 DialogTitle.Text = "添加新密码";
                 SaveButton.Content = "保存";
+                
+                // 如果有当前选中的分组，默认选中它（从主窗口传递）
+                // 这里需要通过其他方式传递，暂时保持默认不选择分组
             }
 
             // 聚焦到标题输入框
             Loaded += (s, e) => TitleTextBox.Focus();
+        }
+
+        /// <summary>
+        /// 加载分组列表
+        /// </summary>
+        private void LoadGroups()
+        {
+            var groups = _storageManager.GetGroups();
+            
+            // 添加"无分组"选项
+            var noGroupOption = new Group { Name = "无分组", Id = "" };
+            var displayList = new List<Group> { noGroupOption };
+            displayList.AddRange(groups.OrderBy(g => g.SortOrder).ThenBy(g => g.Name));
+            
+            GroupComboBox.ItemsSource = displayList;
+            GroupComboBox.SelectedIndex = 0; // 默认选择"无分组"
+        }
+
+        /// <summary>
+        /// 设置当前分组
+        /// </summary>
+        private void SetCurrentGroup(string groupId)
+        {
+            if (GroupComboBox.ItemsSource is List<Group> groups)
+            {
+                var selectedGroup = groups.FirstOrDefault(g => g.Id == groupId);
+                if (selectedGroup != null)
+                {
+                    GroupComboBox.SelectedItem = selectedGroup;
+                }
+                else
+                {
+                    GroupComboBox.SelectedIndex = 0; // 选择"无分组"
+                }
+            }
         }
 
         /// <summary>
@@ -242,9 +286,11 @@ namespace PasswordManager.Views
                 return false;
             }
 
-            try
-            {
-                var customFields = CollectCustomFields();
+           try
+           {
+               var customFields = CollectCustomFields();
+                var selectedGroup = GroupComboBox.SelectedItem as Group;
+                string groupId = selectedGroup?.Id ?? "";
 
                 if (_isEditMode)
                 {
@@ -256,6 +302,7 @@ namespace PasswordManager.Views
                     entry.URL = URLTextBox.Text?.Trim() ?? "";
                     entry.Category = CategoryTextBox.Text?.Trim() ?? "";
                     entry.Notes = NotesTextBox.Text?.Trim() ?? "";
+                    entry.GroupId = groupId;
                     entry.CustomFields = customFields;
 
                     _storageManager.UpdateEntry(entry);
@@ -270,7 +317,8 @@ namespace PasswordManager.Views
                         password,
                         URLTextBox.Text?.Trim() ?? "",
                         NotesTextBox.Text?.Trim() ?? "",
-                        CategoryTextBox.Text?.Trim() ?? ""
+                        CategoryTextBox.Text?.Trim() ?? "",
+                        groupId
                     );
                     entry.CustomFields = customFields;
 

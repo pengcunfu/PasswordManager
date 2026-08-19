@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -80,15 +80,27 @@ namespace PasswordManager.Services
                 }
             }
 
-            // 解密条目数据
-            if (root.TryGetProperty("entries", out var entriesElement) && entriesElement.ValueKind == JsonValueKind.Array)
+           // 解密条目数据
+           if (root.TryGetProperty("entries", out var entriesElement) && entriesElement.ValueKind == JsonValueKind.Array)
+           {
+               _database.Entries = new List<PasswordEntry>();
+               
+               foreach (var entryElement in entriesElement.EnumerateArray())
+               {
+                   var entry = DecryptEntry(entryElement);
+                   _database.Entries.Add(entry);
+               }
+           }
+            
+            // 解密分组数据
+            if (root.TryGetProperty("groups", out var groupsElement) && groupsElement.ValueKind == JsonValueKind.Array)
             {
-                _database.Entries = new List<PasswordEntry>();
+                _database.Groups = new List<Group>();
                 
-                foreach (var entryElement in entriesElement.EnumerateArray())
+                foreach (var groupElement in groupsElement.EnumerateArray())
                 {
-                    var entry = DecryptEntry(entryElement);
-                    _database.Entries.Add(entry);
+                    var group = DecryptGroup(groupElement);
+                    _database.Groups.Add(group);
                 }
             }
         }
@@ -107,7 +119,8 @@ namespace PasswordManager.Services
                 ["salt"] = _database.Salt,
                 ["version"] = _database.Version,
                 ["created_at"] = _database.CreatedAt.ToString("O"),
-                ["entries"] = _database.Entries.Select(EncryptEntry).ToArray()
+               ["entries"] = _database.Entries.Select(EncryptEntry).ToArray(),
+                ["groups"] = _database.Groups.Select(EncryptGroup).ToArray()
             };
 
             // 序列化为JSON
@@ -238,18 +251,19 @@ namespace PasswordManager.Services
                 ["is_hidden"] = f.IsHidden
             }).ToList();
 
-            return new Dictionary<string, object>
-            {
-                ["id"] = entry.Id,
-                ["title"] = entry.Title,
-                ["username"] = entry.Username,
-                ["password"] = encryptedPassword,
-                ["url"] = entry.URL,
-                ["notes"] = encryptedNotes,
-                ["category"] = entry.Category,
-                ["custom_fields"] = customFields,
-                ["created_at"] = entry.CreatedAt.ToString("O"),
-                ["updated_at"] = entry.UpdatedAt.ToString("O")
+             return new Dictionary<string, object>
+             {
+                 ["id"] = entry.Id,
+                 ["title"] = entry.Title,
+                 ["username"] = entry.Username,
+                 ["password"] = encryptedPassword,
+                 ["url"] = entry.URL,
+                 ["notes"] = encryptedNotes,
+                 ["category"] = entry.Category,
+                 ["group_id"] = entry.GroupId,
+                 ["custom_fields"] = customFields,
+                 ["created_at"] = entry.CreatedAt.ToString("O"),
+                 ["updated_at"] = entry.UpdatedAt.ToString("O")
             };
         }
 
@@ -273,10 +287,13 @@ namespace PasswordManager.Services
             if (entryElement.TryGetProperty("url", out var urlElement))
                 entry.URL = urlElement.GetString() ?? string.Empty;
 
-            if (entryElement.TryGetProperty("category", out var categoryElement))
-                entry.Category = categoryElement.GetString() ?? string.Empty;
-
-            // 解析时间字段
+             if (entryElement.TryGetProperty("category", out var categoryElement))
+                 entry.Category = categoryElement.GetString() ?? string.Empty;
+ 
+             if (entryElement.TryGetProperty("group_id", out var groupIdElement))
+                 entry.GroupId = groupIdElement.GetString() ?? string.Empty;
+  
+             // 解析时间字段
             if (entryElement.TryGetProperty("created_at", out var createdAtElement))
             {
                 if (DateTime.TryParse(createdAtElement.GetString(), out var createdAt))
@@ -327,7 +344,139 @@ namespace PasswordManager.Services
                 }
             }
 
-            return entry;
+           return entry;
+       }
+
+        /// <summary>
+        /// 获取所有分组
+        /// </summary>
+        public List<Group> GetGroups()
+        {
+            return _database?.Groups ?? new List<Group>();
+        }
+
+        /// <summary>
+        /// 添加分组
+        /// </summary>
+        public void AddGroup(Group group)
+        {
+            if (_database == null)
+                throw new InvalidOperationException("数据库未初始化");
+
+            _database.Groups.Add(group);
+            SaveDatabase();
+        }
+
+        /// <summary>
+        /// 更新分组
+        /// </summary>
+        public void UpdateGroup(Group group)
+        {
+            if (_database == null)
+                throw new InvalidOperationException("数据库未初始化");
+
+            var existingGroup = _database.Groups.FirstOrDefault(g => g.Id == group.Id);
+            if (existingGroup == null)
+                throw new InvalidOperationException($"未找到ID为 {group.Id} 的分组");
+
+            group.UpdateModifiedTime();
+            int index = _database.Groups.IndexOf(existingGroup);
+            _database.Groups[index] = group;
+            SaveDatabase();
+        }
+
+        /// <summary>
+        /// 删除分组
+        /// </summary>
+        public void DeleteGroup(string groupId)
+        {
+            if (_database == null)
+                throw new InvalidOperationException("数据库未初始化");
+
+            var group = _database.Groups.FirstOrDefault(g => g.Id == groupId);
+            if (group == null)
+                throw new InvalidOperationException($"未找到ID为 {groupId} 的分组");
+
+            // 将属于该分组的条目的GroupId设置为空
+            foreach (var entry in _database.Entries.Where(e => e.GroupId == groupId))
+            {
+                entry.GroupId = string.Empty;
+            }
+
+            _database.Groups.Remove(group);
+            SaveDatabase();
+        }
+
+        /// <summary>
+        /// 根据分组ID获取密码条目
+        /// </summary>
+        public List<PasswordEntry> GetEntriesByGroup(string groupId)
+        {
+            if (string.IsNullOrEmpty(groupId))
+            {
+                return _database?.Entries.Where(e => string.IsNullOrEmpty(e.GroupId)).ToList() 
+                       ?? new List<PasswordEntry>();
+            }
+            
+            return _database?.Entries.Where(e => e.GroupId == groupId).ToList() 
+                   ?? new List<PasswordEntry>();
+        }
+
+        /// <summary>
+        /// 加密分组
+        /// </summary>
+        private Dictionary<string, object> EncryptGroup(Group group)
+        {
+            // 分组的基本信息不需要加密，因为它们不包含敏感数据
+            return new Dictionary<string, object>
+            {
+                ["id"] = group.Id,
+                ["name"] = group.Name,
+                ["description"] = group.Description,
+                ["color"] = group.Color,
+                ["sort_order"] = group.SortOrder,
+                ["created_at"] = group.CreatedAt.ToString("O"),
+                ["updated_at"] = group.UpdatedAt.ToString("O")
+            };
+        }
+
+        /// <summary>
+        /// 解密分组
+        /// </summary>
+        private Group DecryptGroup(JsonElement groupElement)
+        {
+            var group = new Group();
+
+            // 解析字段
+            if (groupElement.TryGetProperty("id", out var idElement))
+                group.Id = idElement.GetString() ?? string.Empty;
+
+            if (groupElement.TryGetProperty("name", out var nameElement))
+                group.Name = nameElement.GetString() ?? string.Empty;
+
+            if (groupElement.TryGetProperty("description", out var descriptionElement))
+                group.Description = descriptionElement.GetString() ?? string.Empty;
+
+            if (groupElement.TryGetProperty("color", out var colorElement))
+                group.Color = colorElement.GetString() ?? "#4A90E2";
+
+            if (groupElement.TryGetProperty("sort_order", out var sortOrderElement))
+                group.SortOrder = sortOrderElement.GetInt32();
+
+            // 解析时间字段
+            if (groupElement.TryGetProperty("created_at", out var createdAtElement))
+            {
+                if (DateTime.TryParse(createdAtElement.GetString(), out var createdAt))
+                    group.CreatedAt = createdAt;
+            }
+
+            if (groupElement.TryGetProperty("updated_at", out var updatedAtElement))
+            {
+                if (DateTime.TryParse(updatedAtElement.GetString(), out var updatedAt))
+                    group.UpdatedAt = updatedAt;
+            }
+
+            return group;
         }
 
         /// <summary>
@@ -348,3 +497,4 @@ namespace PasswordManager.Services
         }
     }
 }
+

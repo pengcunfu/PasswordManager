@@ -1055,6 +1055,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('detail-icon').innerHTML = ICO.clipboard;
   document.getElementById('chat-header-icon').innerHTML = ICO.bot;
   document.getElementById('chat-welcome-icon').innerHTML = ICO.bot;
+
+  // 向 C# 发送 init 消息，检查是否已登录（页面刷新场景）
+  App.post('init');
 });
 </script>
 </body>

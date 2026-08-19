@@ -113,14 +113,26 @@
                            Style="{StaticResource NaiveTextBox}"
                            Margin="0,0,0,10"/>
 
-                    <!-- 分类 -->
-                    <TextBlock Text="分类"
-                              FontSize="13"
-                              Foreground="#555555"
-                              Margin="0,0,0,8"/>
-                    <TextBox x:Name="CategoryTextBox"
-                           Style="{StaticResource NaiveTextBox}"
-                           Margin="0,0,0,10"/>
+                   <!-- 分类 -->
+                   <TextBlock Text="分类"
+                             FontSize="13"
+                             Foreground="#555555"
+                             Margin="0,0,0,8"/>
+                   <TextBox x:Name="CategoryTextBox"
+                          Style="{StaticResource NaiveTextBox}"
+                          Margin="0,0,0,10"/>
+
+                   <!-- 分组 -->
+                   <TextBlock Text="分组"
+                             FontSize="13"
+                             Foreground="#555555"
+                             Margin="0,0,0,8"/>
+                   <ComboBox x:Name="GroupComboBox"
+                             Style="{StaticResource NaiveComboBox}"
+                             Height="36"
+                             VerticalContentAlignment="Center"
+                             Margin="0,0,0,10"
+                             DisplayMemberPath="Name"/>
 
                     <!-- 备注 -->
                     <TextBlock Text="备注"

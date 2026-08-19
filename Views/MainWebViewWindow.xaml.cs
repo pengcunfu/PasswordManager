@@ -18,6 +18,7 @@ namespace PasswordManager.Views
             InitializeComponent();
             _dataDir = dataDir;
             Loaded += Window_Loaded;
+            PreviewKeyDown += Window_PreviewKeyDown;
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -34,8 +35,8 @@ namespace PasswordManager.Views
                 var env = await CoreWebView2Environment.CreateAsync(null, userData);
                 await _webView.EnsureCoreWebView2Async(env);
 
-                _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
-                _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 _webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
 
@@ -66,6 +67,48 @@ namespace PasswordManager.Views
         {
             _handler?.Dispose();
             _webView?.Dispose();
+        }
+
+        /// <summary>
+        /// 拦截键盘快捷键，禁用浏览器功能
+        /// </summary>
+        private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            var key = e.Key;
+
+            // 禁用 F5（刷新）
+            if (key == System.Windows.Input.Key.F5)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // 禁用 F12（开发者工具）
+            if (key == System.Windows.Input.Key.F12)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // 禁用 Ctrl+R（刷新）、Ctrl+U（查看源代码）
+            if (e.KeyboardDevice.Modifiers == System.Windows.Input.ModifierKeys.Control)
+            {
+                if (key == System.Windows.Input.Key.R || key == System.Windows.Input.Key.U)
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // 禁用 Ctrl+Shift+I（开发者工具）、Ctrl+Shift+J（控制台）
+            if (e.KeyboardDevice.Modifiers == (System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift))
+            {
+                if (key == System.Windows.Input.Key.I || key == System.Windows.Input.Key.J)
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
         }
     }
 }

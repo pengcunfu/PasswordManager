@@ -107,6 +107,21 @@ namespace PasswordManager.Services
 
         private void HandleInit()
         {
+            // 如果已登录（页面刷新场景），直接发送登录结果
+            if (_isLoggedIn && _storageManager != null)
+            {
+                var allEntries = _storageManager.GetAllEntries();
+                var list = allEntries.Select(e => new
+                {
+                    e.Id, e.Title, e.Username, e.Category,
+                    createdAt = e.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+                    updatedAt = e.UpdatedAt.ToString("yyyy-MM-dd HH:mm")
+                }).ToList();
+
+                PostMessage("loginResult", new { success = true, entries = list });
+                return;
+            }
+
             string dbPath = Path.Combine(_dataDir, "passwords.json");
             bool hasDb = File.Exists(dbPath);
             PostMessage("init", new { hasDb, dataDir = _dataDir });

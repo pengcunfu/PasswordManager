@@ -6,46 +6,49 @@ using System.Runtime.CompilerServices;
 
 namespace PasswordManager.Models
 {
-    /// <summary>
-    /// 密码条目实体类
-    /// </summary>
-    public class PasswordEntry : INotifyPropertyChanged
-    {
-        private string _id;
-        private string _title;
-        private string _username;
-        private string _password;
-        private string _url;
-        private string _notes;
-        private string _category;
-        private List<CustomField> _customFields;
-        private DateTime _createdAt;
-        private DateTime _updatedAt;
+   /// <summary>
+   /// 密码条目实体类
+   /// </summary>
+   public class PasswordEntry : INotifyPropertyChanged
+   {
+       private string _id;
+       private string _title;
+       private string _username;
+       private string _password;
+       private string _url;
+       private string _notes;
+       private string _category;
+        private string _groupId;
+       private List<CustomField> _customFields;
+       private DateTime _createdAt;
+       private DateTime _updatedAt;
 
-        public PasswordEntry()
-        {
-            _id = GenerateId();
-            _title = string.Empty;
-            _username = string.Empty;
-            _password = string.Empty;
-            _url = string.Empty;
-            _notes = string.Empty;
-            _category = string.Empty;
-            _customFields = new List<CustomField>();
-            _createdAt = DateTime.Now;
-            _updatedAt = DateTime.Now;
-        }
+       public PasswordEntry()
+       {
+           _id = GenerateId();
+           _title = string.Empty;
+           _username = string.Empty;
+           _password = string.Empty;
+           _url = string.Empty;
+           _notes = string.Empty;
+           _category = string.Empty;
+            _groupId = string.Empty;
+           _customFields = new List<CustomField>();
+           _createdAt = DateTime.Now;
+           _updatedAt = DateTime.Now;
+       }
 
-        public PasswordEntry(string title, string username, string password, string url, string notes, string category)
-            : this()
-        {
-            _title = title;
-            _username = username;
-            _password = password;
-            _url = url;
-            _notes = notes;
-            _category = category;
-        }
+        public PasswordEntry(string title, string username, string password, string url, string notes, string category, string groupId = "")
+           : this()
+       {
+           _title = title;
+           _username = username;
+           _password = password;
+           _url = url;
+           _notes = notes;
+           _category = category;
+            _groupId = groupId;
+       }
 
         public string Id
         {
@@ -83,16 +86,22 @@ namespace PasswordManager.Models
             set => SetProperty(ref _notes, value);
         }
 
-        public string Category
+       public string Category
+       {
+           get => _category;
+           set => SetProperty(ref _category, value);
+       }
+
+        public string GroupId
         {
-            get => _category;
-            set => SetProperty(ref _category, value);
+            get => _groupId;
+            set => SetProperty(ref _groupId, value);
         }
 
-        /// <summary>
-        /// 自定义字段列表
-        /// </summary>
-        public List<CustomField> CustomFields
+       /// <summary>
+       /// 自定义字段列表
+       /// </summary>
+       public List<CustomField> CustomFields
         {
             get => _customFields;
             set => SetProperty(ref _customFields, value);

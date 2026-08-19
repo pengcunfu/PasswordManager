@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using PasswordManager.Models;
 using PasswordManager.Services;
 
@@ -13,30 +14,80 @@ namespace PasswordManager.Views
     /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly StorageManager _storageManager;
-        private readonly string _dataDir;
-        private List<PasswordEntry> _allEntries = [];
-        private List<PasswordEntry> _filteredEntries = [];
-        private PasswordEntry? _selectedEntry;
-        private bool _isPasswordVisible;
+       private readonly StorageManager _storageManager;
+       private readonly string _dataDir;
+       private List<PasswordEntry> _allEntries = [];
+       private List<PasswordEntry> _filteredEntries = [];
+        private List<Group> _groups = [];
+        private string? _selectedGroupId;
+       private PasswordEntry? _selectedEntry;
+       private bool _isPasswordVisible;
 
-        public MainWindow(StorageManager storageManager, string dataDir)
+       public MainWindow(StorageManager storageManager, string dataDir)
+       {
+           InitializeComponent();
+           _storageManager = storageManager;
+           _dataDir = dataDir;
+           
+           LoadEntries();
+            LoadGroups();
+           SetupPlaceholder();
+       }
+
+       /// <summary>
+       /// 加载密码条目
+       /// </summary>
+       private void LoadEntries()
+       {
+           _allEntries = _storageManager.GetAllEntries();
+           _filteredEntries = _allEntries.ToList();
+           EntryListBox.ItemsSource = _filteredEntries;
+       }
+
+        /// <summary>
+        /// 加载分组列表
+        /// </summary>
+        private void LoadGroups()
         {
-            InitializeComponent();
-            _storageManager = storageManager;
-            _dataDir = dataDir;
-            
-            LoadEntries();
-            SetupPlaceholder();
+            _groups = _storageManager.GetGroups();
+            _groups = _groups.OrderBy(g => g.SortOrder).ThenBy(g => g.Name).ToList();
+            GroupListBox.ItemsSource = _groups;
         }
 
         /// <summary>
-        /// 加载密码条目
+        /// 根据分组筛选密码条目
         /// </summary>
-        private void LoadEntries()
+        private void FilterEntriesByGroup(string? groupId)
         {
-            _allEntries = _storageManager.GetAllEntries();
-            _filteredEntries = _allEntries.ToList();
+            _selectedGroupId = groupId;
+            
+            if (string.IsNullOrEmpty(groupId))
+            {
+                // 显示所有密码
+                _filteredEntries = _allEntries.ToList();
+            }
+            else
+            {
+                // 显示指定分组的密码
+                _filteredEntries = _allEntries.Where(e => e.GroupId == groupId).ToList();
+            }
+            
+            // 应用当前的搜索过滤
+            if (SearchTextBox.Text != "搜索密码..." && SearchTextBox.Foreground != System.Windows.Media.Brushes.Gray)
+            {
+                string searchText = SearchTextBox.Text.ToLowerInvariant();
+                _filteredEntries = _filteredEntries.Where(entry =>
+                    (entry.Title?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                    (entry.Username?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                    (entry.URL?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                    (entry.Category?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                    (entry.Notes?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                    entry.CustomFields.Any(f =>
+                        (f.Key?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                        (f.Value?.ToLowerInvariant().Contains(searchText) ?? false))
+                ).ToList();
+            }
+            
             EntryListBox.ItemsSource = _filteredEntries;
         }
 
@@ -265,22 +316,171 @@ namespace PasswordManager.Views
             aiChatWindow.Show();
         }
 
-        private void LogoutButton_Click(object sender, RoutedEventArgs e)
-        {
-            var result = MessageBox.Show("确定要注销并返回登录界面吗？", "注销确认", 
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
+       private void LogoutButton_Click(object sender, RoutedEventArgs e)
+       {
+           var result = MessageBox.Show("确定要注销并返回登录界面吗？", "注销确认", 
+               MessageBoxButton.YesNo, MessageBoxImage.Question);
 
-            if (result == MessageBoxResult.Yes)
+           if (result == MessageBoxResult.Yes)
+           {
+               var loginWindow = new LoginWindow(_dataDir, (storageManager) =>
+               {
+                   var newMainWindow = new MainWindow(storageManager, _dataDir);
+                   newMainWindow.Show();
+               });
+               
+               loginWindow.Show();
+               Close();
+           }
+       }
+
+       private void RefreshButton_Click(object sender, RoutedEventArgs e)
+       {
+           try
+           {
+               LoadEntries();
+                LoadGroups();
+               FilterEntries(SearchTextBox.Text == "搜索密码..." ? "" : SearchTextBox.Text);
+               
+               // 如果之前有选中的条目，尝试重新选中它
+               if (_selectedEntry != null)
+               {
+                   var updatedEntry = _filteredEntries.FirstOrDefault(e => e.Id == _selectedEntry.Id);
+                   if (updatedEntry != null)
+                   {
+                       EntryListBox.SelectedItem = updatedEntry;
+                       ShowEntryDetails(updatedEntry);
+                   }
+                   else
+                   {
+                       // 如果条目已被删除，隐藏详情面板
+                       WelcomeText.Visibility = Visibility.Visible;
+                       DetailContent.Visibility = Visibility.Collapsed;
+                       _selectedEntry = null;
+                   }
+               }
+           }
+           catch (Exception ex)
+           {
+               MessageBox.Show($"刷新失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+           }
+       }
+
+        private void AddGroupButton_Click(object sender, RoutedEventArgs e)
+        {
+            var groupDialog = new GroupDialog();
+            groupDialog.Owner = this;
+            
+            if (groupDialog.ShowDialog() == true)
             {
-                var loginWindow = new LoginWindow(_dataDir, (storageManager) =>
+                var newGroup = groupDialog.GetGroup();
+                if (newGroup != null)
                 {
-                    var newMainWindow = new MainWindow(storageManager, _dataDir);
-                    newMainWindow.Show();
-                });
-                
-                loginWindow.Show();
-                Close();
+                    try
+                    {
+                        _storageManager.AddGroup(newGroup);
+                        LoadGroups();
+                        MessageBox.Show("分组添加成功！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"添加分组失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
             }
+        }
+
+        private void EditGroupButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is string groupId)
+            {
+                var group = _groups.FirstOrDefault(g => g.Id == groupId);
+                if (group == null) return;
+
+                var groupDialog = new GroupDialog(group);
+                groupDialog.Owner = this;
+
+                if (groupDialog.ShowDialog() == true)
+                {
+                    var updatedGroup = groupDialog.GetGroup();
+                    if (updatedGroup != null)
+                    {
+                        try
+                        {
+                            _storageManager.UpdateGroup(updatedGroup);
+                            LoadGroups();
+                            
+                            // 重新应用分组筛选
+                            if (_selectedGroupId == groupId)
+                            {
+                                FilterEntriesByGroup(groupId);
+                            }
+                            
+                            MessageBox.Show("分组更新成功！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"更新分组失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void DeleteGroupButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is string groupId)
+            {
+                var group = _groups.FirstOrDefault(g => g.Id == groupId);
+                if (group == null) return;
+
+                var result = MessageBox.Show(
+                    $"确定要删除分组 '{group.Name}' 吗？\n\n该分组下的密码将移动到'全部密码'中。",
+                    "删除确认",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        _storageManager.DeleteGroup(groupId);
+                        LoadGroups();
+                        
+                        // 如果删除的是当前选中的分组，显示所有密码
+                        if (_selectedGroupId == groupId)
+                        {
+                            _selectedGroupId = null;
+                            LoadEntries();
+                        }
+                        else
+                        {
+                            // 重新应用分组筛选
+                            FilterEntriesByGroup(_selectedGroupId);
+                        }
+                        
+                        MessageBox.Show("分组删除成功！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"删除分组失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+
+        private void GroupListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (GroupListBox.SelectedItem is Group selectedGroup)
+            {
+                FilterEntriesByGroup(selectedGroup.Id);
+            }
+        }
+
+        private void AllEntriesBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            GroupListBox.SelectedItem = null;
+            FilterEntriesByGroup(null);
         }
 
         private void CopyUsernameButton_Click(object sender, RoutedEventArgs e)
