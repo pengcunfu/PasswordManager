@@ -26,6 +26,14 @@ namespace PasswordManager.Views
             }
         }
 
+        private void SymbolCountSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (SymbolCountLabel != null)
+            {
+                SymbolCountLabel.Text = $"特殊符号位数: {(int)SymbolCountSlider.Value}";
+            }
+        }
+
         private void GenerateButton_Click(object sender, RoutedEventArgs e)
         {
             GeneratePassword();
@@ -64,7 +72,8 @@ namespace PasswordManager.Views
             try
             {
                 int length = (int)LengthSlider.Value;
-                
+                int symbolCount = IncludeSymbolsCheckBox.IsChecked == true ? (int)SymbolCountSlider.Value : 0;
+
                 // 检查至少选择了一种字符类型
                 if (IncludeUppercaseCheckBox.IsChecked != true &&
                     IncludeLowercaseCheckBox.IsChecked != true &&
@@ -74,15 +83,19 @@ namespace PasswordManager.Views
                     MessageBox.Show("请至少选择一种字符类型", "错误", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
-                
-                // 构建字符集
-                string charset = BuildCharset();
-                
-                // 生成密码
-                string password = GeneratePasswordFromCharset(charset, length);
-                
+
+                // 检查特殊符号位数不超过密码长度
+                if (symbolCount > length)
+                {
+                    MessageBox.Show("特殊符号位数不能超过密码长度", "错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // 生成密码（保证特殊符号位数）
+                string password = GeneratePasswordWithGuaranteedChars(length, symbolCount);
+
                 GeneratedPasswordTextBox.Text = password;
-                
+
                 // 更新密码强度显示
                 var (strength, score) = CryptoManager.CheckPasswordStrength(password);
                 StrengthLabel.Text = $"密码强度: {strength}";
@@ -123,20 +136,51 @@ namespace PasswordManager.Views
         }
 
         /// <summary>
-        /// 从字符集生成密码
+        /// 生成密码，保证指定数量的特殊符号
         /// </summary>
-        private string GeneratePasswordFromCharset(string charset, int length)
+        private string GeneratePasswordWithGuaranteedChars(int length, int symbolCount)
         {
+            const string uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const string lowercase = "abcdefghijklmnopqrstuvwxyz";
+            const string digits = "0123456789";
+            const string symbols = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+
             var random = new Random();
-            var password = new StringBuilder(length);
-            
-            for (int i = 0; i < length; i++)
+            var password = new char[length];
+
+            // 1. 先填充特殊符号到随机位置
+            var positions = new int[length];
+            for (int i = 0; i < length; i++) positions[i] = i;
+
+            // Fisher-Yates 洗牌取前 symbolCount 个位置
+            for (int i = length - 1; i > 0; i--)
             {
-                int index = random.Next(charset.Length);
-                password.Append(charset[index]);
+                int j = random.Next(i + 1);
+                (positions[i], positions[j]) = (positions[j], positions[i]);
             }
-            
-            return password.ToString();
+
+            for (int i = 0; i < symbolCount; i++)
+            {
+                password[positions[i]] = symbols[random.Next(symbols.Length)];
+            }
+
+            // 2. 构建剩余字符集（排除已关闭的类型）
+            var remainingCharset = new StringBuilder();
+            if (IncludeUppercaseCheckBox.IsChecked == true) remainingCharset.Append(uppercase);
+            if (IncludeLowercaseCheckBox.IsChecked == true) remainingCharset.Append(lowercase);
+            if (IncludeDigitsCheckBox.IsChecked == true) remainingCharset.Append(digits);
+            if (IncludeSymbolsCheckBox.IsChecked == true) remainingCharset.Append(symbols);
+
+            // 如果剩余字符集为空，只用已选中的类型
+            string charset = remainingCharset.Length > 0 ? remainingCharset.ToString() : lowercase;
+
+            // 3. 填充剩余位置
+            for (int i = symbolCount; i < length; i++)
+            {
+                password[positions[i]] = charset[random.Next(charset.Length)];
+            }
+
+            return new string(password);
         }
     }
 }

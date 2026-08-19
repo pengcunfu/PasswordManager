@@ -135,6 +135,42 @@
                            VerticalScrollBarVisibility="Auto"
                            VerticalContentAlignment="Top"
                            Padding="10,8"/>
+
+                    <!-- 自定义字段 -->
+                    <TextBlock Text="自定义字段"
+                              FontSize="13"
+                              Foreground="#555555"
+                              Margin="0,5,0,8"/>
+
+                    <!-- 常用字段快捷按钮 -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="+ 邮箱"
+                              Style="{StaticResource SmallButton}"
+                              Click="AddPresetEmail_Click"
+                              Width="65"
+                              Margin="0,0,8,0"/>
+                        <Button Content="+ 手机号"
+                              Style="{StaticResource SmallButton}"
+                              Click="AddPresetPhone_Click"
+                              Width="75"
+                              Margin="0,0,8,0"/>
+                        <Button Content="+ 密保手机"
+                              Style="{StaticResource SmallButton}"
+                              Click="AddPresetSecurePhone_Click"
+                              Width="85"/>
+                    </StackPanel>
+
+                    <!-- 自定义字段列表 -->
+                    <StackPanel x:Name="CustomFieldsPanel"/>
+
+                    <!-- 添加字段按钮 -->
+                    <Button x:Name="AddCustomFieldButton"
+                          Content="+ 添加自定义字段"
+                          Style="{StaticResource SmallButton}"
+                          Click="AddCustomFieldButton_Click"
+                          HorizontalAlignment="Left"
+                          Margin="0,5,0,10"
+                          Width="120"/>
                 </StackPanel>
             </ScrollViewer>
 

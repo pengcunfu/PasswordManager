@@ -121,6 +121,102 @@ namespace PasswordManager.Views
             DetailUpdatedAt.Text = $"更新时间: {entry.UpdatedAt:yyyy-MM-dd HH:mm:ss}";
 
             ShowPasswordButton.Content = "显示";
+
+            // 显示自定义字段
+            ShowCustomFields(entry.CustomFields);
+        }
+
+        /// <summary>
+        /// 显示自定义字段
+        /// </summary>
+        private void ShowCustomFields(List<CustomField> customFields)
+        {
+            CustomFieldsDetailPanel.Children.Clear();
+
+            if (customFields == null || customFields.Count == 0)
+                return;
+
+            foreach (var field in customFields)
+            {
+                var groupBox = new GroupBox
+                {
+                    Header = field.Key,
+                    Style = (Style)FindResource("NaiveGroupBox")
+                };
+
+                var grid = new Grid();
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var textBox = new TextBox
+                {
+                    Style = (Style)FindResource("ReadOnlyTextBox"),
+                    Text = field.IsHidden ? "••••••••" : field.Value,
+                    Tag = field // 保存引用以便切换显示
+                };
+                Grid.SetColumn(textBox, 0);
+
+                var copyButton = new Button
+                {
+                    Content = "复制",
+                    Style = (Style)FindResource("NaiveSecondaryButton"),
+                    Width = 70,
+                    Tag = field.Value // 保存真实值用于复制
+                };
+                copyButton.Click += (s, e) =>
+                {
+                    if (copyButton.Tag is string val)
+                    {
+                        Clipboard.SetText(val);
+                        MessageBox.Show($"{field.Key} 已复制到剪贴板", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                };
+                Grid.SetColumn(copyButton, 1);
+
+                if (field.IsHidden)
+                {
+                    var showButton = new Button
+                    {
+                        Content = "显示",
+                        Style = (Style)FindResource("NaiveSecondaryButton"),
+                        Width = 70,
+                        Margin = new Thickness(0, 0, 8, 0)
+                    };
+
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    Grid.SetColumn(showButton, 1);
+                    Grid.SetColumn(copyButton, 2);
+
+                    bool isVisible = false;
+                    showButton.Click += (s, e) =>
+                    {
+                        if (isVisible)
+                        {
+                            textBox.Text = "••••••••";
+                            showButton.Content = "显示";
+                            isVisible = false;
+                        }
+                        else
+                        {
+                            textBox.Text = field.Value;
+                            showButton.Content = "隐藏";
+                            isVisible = true;
+                        }
+                    };
+
+                    grid.Children.Add(textBox);
+                    grid.Children.Add(showButton);
+                    grid.Children.Add(copyButton);
+                }
+                else
+                {
+                    grid.Children.Add(textBox);
+                    grid.Children.Add(copyButton);
+                }
+
+                groupBox.Content = grid;
+                CustomFieldsDetailPanel.Children.Add(groupBox);
+            }
         }
 
         private void AddButton_Click(object sender, RoutedEventArgs e)

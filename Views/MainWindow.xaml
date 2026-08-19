@@ -229,6 +229,10 @@
                                        VerticalContentAlignment="Top"/>
                             </GroupBox>
 
+                            <!-- 自定义字段 -->
+                            <StackPanel x:Name="CustomFieldsDetailPanel"
+                                       Margin="0,0,0,10"/>
+
                             <!-- 时间信息 -->
                             <StackPanel Margin="0,0,0,10">
                                 <TextBlock x:Name="DetailCreatedAt"

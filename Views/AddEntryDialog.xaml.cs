@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using PasswordManager.Models;
@@ -15,6 +16,7 @@ namespace PasswordManager.Views
         private readonly PasswordEntry? _editingEntry;
         private bool _isPasswordVisible;
         private bool _isEditMode;
+        private readonly List<CustomFieldControl> _customFieldControls = new();
 
         public AddEntryDialog(StorageManager storageManager, PasswordEntry? editingEntry = null)
         {
@@ -22,7 +24,7 @@ namespace PasswordManager.Views
             _storageManager = storageManager;
             _editingEntry = editingEntry;
             _isEditMode = editingEntry != null;
-            
+
             InitializeDialog();
         }
 
@@ -35,7 +37,7 @@ namespace PasswordManager.Views
             {
                 DialogTitle.Text = "编辑密码";
                 SaveButton.Content = "更新";
-                
+
                 // 填充现有数据
                 TitleTextBox.Text = _editingEntry!.Title;
                 UsernameTextBox.Text = _editingEntry.Username;
@@ -43,17 +45,87 @@ namespace PasswordManager.Views
                 URLTextBox.Text = _editingEntry.URL;
                 CategoryTextBox.Text = _editingEntry.Category;
                 NotesTextBox.Text = _editingEntry.Notes;
-                
+
                 UpdatePasswordStrength(_editingEntry.Password);
+
+                // 加载自定义字段
+                foreach (var field in _editingEntry.CustomFields)
+                {
+                    AddCustomFieldRow(field.Key, field.Value, field.IsHidden);
+                }
             }
             else
             {
                 DialogTitle.Text = "添加新密码";
                 SaveButton.Content = "保存";
             }
-            
+
             // 聚焦到标题输入框
             Loaded += (s, e) => TitleTextBox.Focus();
+        }
+
+        /// <summary>
+        /// 添加预设邮箱字段
+        /// </summary>
+        private void AddPresetEmail_Click(object sender, RoutedEventArgs e)
+        {
+            AddCustomFieldRow("邮箱", "", false);
+        }
+
+        /// <summary>
+        /// 添加预设手机号字段
+        /// </summary>
+        private void AddPresetPhone_Click(object sender, RoutedEventArgs e)
+        {
+            AddCustomFieldRow("手机号", "", false);
+        }
+
+        /// <summary>
+        /// 添加预设密保手机字段
+        /// </summary>
+        private void AddPresetSecurePhone_Click(object sender, RoutedEventArgs e)
+        {
+            AddCustomFieldRow("密保手机", "", true);
+        }
+
+        /// <summary>
+        /// 添加自定义字段按钮点击
+        /// </summary>
+        private void AddCustomFieldButton_Click(object sender, RoutedEventArgs e)
+        {
+            AddCustomFieldRow("", "", false);
+        }
+
+        /// <summary>
+        /// 添加一行自定义字段
+        /// </summary>
+        private void AddCustomFieldRow(string key, string value, bool isHidden)
+        {
+            var control = new CustomFieldControl(key, value, isHidden);
+            control.RemoveClicked += (s, e) =>
+            {
+                CustomFieldsPanel.Children.Remove(control);
+                _customFieldControls.Remove(control);
+            };
+            _customFieldControls.Add(control);
+            CustomFieldsPanel.Children.Add(control);
+        }
+
+        /// <summary>
+        /// 获取所有自定义字段数据
+        /// </summary>
+        private List<CustomField> CollectCustomFields()
+        {
+            var fields = new List<CustomField>();
+            foreach (var control in _customFieldControls)
+            {
+                var (key, value, isHidden) = control.GetFieldData();
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    fields.Add(new CustomField(key.Trim(), value ?? "", isHidden));
+                }
+            }
+            return fields;
         }
 
         private void ShowPasswordButton_Click(object sender, RoutedEventArgs e)
@@ -172,6 +244,8 @@ namespace PasswordManager.Views
 
             try
             {
+                var customFields = CollectCustomFields();
+
                 if (_isEditMode)
                 {
                     // 更新现有条目
@@ -182,7 +256,8 @@ namespace PasswordManager.Views
                     entry.URL = URLTextBox.Text?.Trim() ?? "";
                     entry.Category = CategoryTextBox.Text?.Trim() ?? "";
                     entry.Notes = NotesTextBox.Text?.Trim() ?? "";
-                    
+                    entry.CustomFields = customFields;
+
                     _storageManager.UpdateEntry(entry);
                     MessageBox.Show("密码条目已更新", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
@@ -197,6 +272,7 @@ namespace PasswordManager.Views
                         NotesTextBox.Text?.Trim() ?? "",
                         CategoryTextBox.Text?.Trim() ?? ""
                     );
+                    entry.CustomFields = customFields;
 
                     _storageManager.AddEntry(entry);
                     MessageBox.Show("密码条目已保存", "成功", MessageBoxButton.OK, MessageBoxImage.Information);

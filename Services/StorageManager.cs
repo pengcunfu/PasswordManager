@@ -192,7 +192,10 @@ namespace PasswordManager.Services
                 (entry.Username?.ToLowerInvariant().Contains(keyword) ?? false) ||
                 (entry.URL?.ToLowerInvariant().Contains(keyword) ?? false) ||
                 (entry.Category?.ToLowerInvariant().Contains(keyword) ?? false) ||
-                (entry.Notes?.ToLowerInvariant().Contains(keyword) ?? false)
+                (entry.Notes?.ToLowerInvariant().Contains(keyword) ?? false) ||
+                entry.CustomFields.Any(f =>
+                    (f.Key?.ToLowerInvariant().Contains(keyword) ?? false) ||
+                    (f.Value?.ToLowerInvariant().Contains(keyword) ?? false))
             ).ToList();
         }
 
@@ -227,6 +230,14 @@ namespace PasswordManager.Services
             string encryptedPassword = _cryptoManager.Encrypt(entry.Password);
             string encryptedNotes = _cryptoManager.Encrypt(entry.Notes);
 
+            // 加密自定义字段（isHidden=true 的字段值需要加密）
+            var customFields = entry.CustomFields.Select(f => new Dictionary<string, object>
+            {
+                ["key"] = f.Key,
+                ["value"] = f.IsHidden ? _cryptoManager.Encrypt(f.Value) : f.Value,
+                ["is_hidden"] = f.IsHidden
+            }).ToList();
+
             return new Dictionary<string, object>
             {
                 ["id"] = entry.Id,
@@ -236,6 +247,7 @@ namespace PasswordManager.Services
                 ["url"] = entry.URL,
                 ["notes"] = encryptedNotes,
                 ["category"] = entry.Category,
+                ["custom_fields"] = customFields,
                 ["created_at"] = entry.CreatedAt.ToString("O"),
                 ["updated_at"] = entry.UpdatedAt.ToString("O")
             };
@@ -286,6 +298,33 @@ namespace PasswordManager.Services
             if (entryElement.TryGetProperty("notes", out var notesElement))
             {
                 entry.Notes = _cryptoManager.Decrypt(notesElement.GetString() ?? string.Empty);
+            }
+
+            // 解析自定义字段
+            if (entryElement.TryGetProperty("custom_fields", out var customFieldsElement) &&
+                customFieldsElement.ValueKind == JsonValueKind.Array)
+            {
+                entry.CustomFields = new List<CustomField>();
+                foreach (var fieldElement in customFieldsElement.EnumerateArray())
+                {
+                    var field = new CustomField();
+
+                    if (fieldElement.TryGetProperty("key", out var keyElement))
+                        field.Key = keyElement.GetString() ?? string.Empty;
+
+                    bool isHidden = false;
+                    if (fieldElement.TryGetProperty("is_hidden", out var isHiddenElement))
+                        isHidden = isHiddenElement.GetBoolean();
+                    field.IsHidden = isHidden;
+
+                    if (fieldElement.TryGetProperty("value", out var valueElement))
+                    {
+                        string rawValue = valueElement.GetString() ?? string.Empty;
+                        field.Value = isHidden ? _cryptoManager.Decrypt(rawValue) : rawValue;
+                    }
+
+                    entry.CustomFields.Add(field);
+                }
             }
 
             return entry;

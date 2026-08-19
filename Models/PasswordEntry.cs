@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace PasswordManager.Models
@@ -16,6 +18,7 @@ namespace PasswordManager.Models
         private string _url;
         private string _notes;
         private string _category;
+        private List<CustomField> _customFields;
         private DateTime _createdAt;
         private DateTime _updatedAt;
 
@@ -28,6 +31,7 @@ namespace PasswordManager.Models
             _url = string.Empty;
             _notes = string.Empty;
             _category = string.Empty;
+            _customFields = new List<CustomField>();
             _createdAt = DateTime.Now;
             _updatedAt = DateTime.Now;
         }
@@ -83,6 +87,24 @@ namespace PasswordManager.Models
         {
             get => _category;
             set => SetProperty(ref _category, value);
+        }
+
+        /// <summary>
+        /// 自定义字段列表
+        /// </summary>
+        public List<CustomField> CustomFields
+        {
+            get => _customFields;
+            set => SetProperty(ref _customFields, value);
+        }
+
+        /// <summary>
+        /// 获取自定义字段值
+        /// </summary>
+        public string? GetCustomFieldValue(string key)
+        {
+            return _customFields.FirstOrDefault(f =>
+                f.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value;
         }
 
         public DateTime CreatedAt

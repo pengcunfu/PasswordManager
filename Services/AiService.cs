@@ -355,6 +355,19 @@ namespace PasswordManager.Services
             - 搜索、查看、添加、修改、删除密码条目
             - 生成安全的随机密码
             - 列出所有密码分类
+            - 管理自定义字段（邮箱、手机号、密保手机、密保问题等）
+
+            ## 多账号支持
+            - 同一个服务（如 GitHub、QQ）可以有多个账号
+            - 用户说"我有3个GitHub账号"时，应该创建3个条目，标题可以是"GitHub"、"GitHub-工作"等
+            - 通过标题区分不同账号，如"GitHub-个人"、"GitHub-公司"
+
+            ## 自定义字段规则（非常重要）
+            - 密码条目支持自定义键值对字段，用于保存邮箱、手机号、密保手机等信息
+            - 用户提到邮箱、手机号、密保手机等信息时，应该自动识别并存入自定义字段
+            - 常见字段名：邮箱、手机号、密保手机、密保问题、备用邮箱、身份证号等
+            - 自定义字段支持"隐藏"标记，敏感信息（如密保手机）应设置 isHidden=true
+            - 添加或更新密码时，使用 custom_fields 参数传递自定义字段
 
             ## 查找密码规则（非常重要）
             - 用户要求查看某个密码时，先用 search_passwords 搜索关键词
@@ -373,6 +386,7 @@ namespace PasswordManager.Services
             - 例如密码是 abc123，则写成 [PASSWORD:abc123]
             - 除此之外不要在回复中出现任何密码明文
             - 用户名、网址、分类、备注等非密码信息正常显示即可
+            - 自定义字段中的隐藏字段（isHidden=true）显示为 ••••••••，不要显示真实值
 
             ## 安全规则
             - 删除操作前必须确认
@@ -429,7 +443,7 @@ namespace PasswordManager.Services
                     function = new
                     {
                         name = "add_password",
-                        description = "添加新的密码条目。",
+                        description = "添加新的密码条目。支持自定义字段（如邮箱、手机号等）。",
                         parameters = new
                         {
                             type = "object",
@@ -440,7 +454,23 @@ namespace PasswordManager.Services
                                 password = new { type = "string", description = "密码" },
                                 url = new { type = "string", description = "网址" },
                                 notes = new { type = "string", description = "备注" },
-                                category = new { type = "string", description = "分类" }
+                                category = new { type = "string", description = "分类" },
+                                custom_fields = new
+                                {
+                                    type = "array",
+                                    description = "自定义字段列表，如邮箱、手机号、密保手机等",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            key = new { type = "string", description = "字段名，如：邮箱、手机号、密保手机" },
+                                            value = new { type = "string", description = "字段值" },
+                                            isHidden = new { type = "boolean", description = "是否隐藏显示（敏感信息设为true），默认false" }
+                                        },
+                                        required = new[] { "key", "value" }
+                                    }
+                                }
                             },
                             required = new[] { "title", "username", "password" }
                         }
@@ -452,7 +482,7 @@ namespace PasswordManager.Services
                     function = new
                     {
                         name = "update_password",
-                        description = "更新现有密码条目。需要提供条目 ID。",
+                        description = "更新现有密码条目。需要提供条目 ID。支持更新自定义字段。",
                         parameters = new
                         {
                             type = "object",
@@ -464,7 +494,23 @@ namespace PasswordManager.Services
                                 password = new { type = "string", description = "新密码" },
                                 url = new { type = "string", description = "新网址" },
                                 notes = new { type = "string", description = "新备注" },
-                                category = new { type = "string", description = "新分类" }
+                                category = new { type = "string", description = "新分类" },
+                                custom_fields = new
+                                {
+                                    type = "array",
+                                    description = "自定义字段列表（替换现有自定义字段）",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            key = new { type = "string", description = "字段名" },
+                                            value = new { type = "string", description = "字段值" },
+                                            isHidden = new { type = "boolean", description = "是否隐藏显示，默认false" }
+                                        },
+                                        required = new[] { "key", "value" }
+                                    }
+                                }
                             },
                             required = new[] { "id" }
                         }
@@ -568,7 +614,13 @@ namespace PasswordManager.Services
                 username = e.Username,
                 url = e.URL,
                 category = e.Category,
-                notes = e.Notes
+                notes = e.Notes,
+                custom_fields = e.CustomFields.Select(f => new
+                {
+                    key = f.Key,
+                    value = f.IsHidden ? "••••••••" : f.Value,
+                    isHidden = f.IsHidden
+                }).ToList()
             }).ToList();
 
             return JsonSerializer.Serialize(new { count = results.Count, results });
@@ -596,6 +648,12 @@ namespace PasswordManager.Services
                 url = entry.URL,
                 category = entry.Category,
                 notes = entry.Notes,
+                custom_fields = entry.CustomFields.Select(f => new
+                {
+                    key = f.Key,
+                    value = f.Value,
+                    isHidden = f.IsHidden
+                }).ToList(),
                 created_at = entry.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"),
                 updated_at = entry.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")
             });
@@ -611,6 +669,24 @@ namespace PasswordManager.Services
             string category = args.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "";
 
             var entry = new PasswordEntry(title, username, password, url, notes, category);
+
+            // 解析自定义字段
+            if (args.TryGetProperty("custom_fields", out var customFields) &&
+                customFields.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var field in customFields.EnumerateArray())
+                {
+                    string key = field.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
+                    string value = field.TryGetProperty("value", out var v) ? v.GetString() ?? "" : "";
+                    bool isHidden = field.TryGetProperty("isHidden", out var h) && h.GetBoolean();
+
+                    if (!string.IsNullOrWhiteSpace(key))
+                    {
+                        entry.CustomFields.Add(new CustomField(key, value, isHidden));
+                    }
+                }
+            }
+
             _storageManager.AddEntry(entry);
 
             return JsonSerializer.Serialize(new
@@ -642,6 +718,24 @@ namespace PasswordManager.Services
                 entry.Notes = notes.GetString()!;
             if (args.TryGetProperty("category", out var category) && category.ValueKind == JsonValueKind.String)
                 entry.Category = category.GetString()!;
+
+            // 更新自定义字段
+            if (args.TryGetProperty("custom_fields", out var customFields) &&
+                customFields.ValueKind == JsonValueKind.Array)
+            {
+                entry.CustomFields.Clear();
+                foreach (var field in customFields.EnumerateArray())
+                {
+                    string key = field.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
+                    string value = field.TryGetProperty("value", out var v) ? v.GetString() ?? "" : "";
+                    bool isHidden = field.TryGetProperty("isHidden", out var h) && h.GetBoolean();
+
+                    if (!string.IsNullOrWhiteSpace(key))
+                    {
+                        entry.CustomFields.Add(new CustomField(key, value, isHidden));
+                    }
+                }
+            }
 
             _storageManager.UpdateEntry(entry);
 
